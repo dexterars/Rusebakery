@@ -122,53 +122,110 @@ const GLOBAL_CSS = `
 `;
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
+//
+// Blue Posts → direct BlueTracker.gg permalink per thread.
+//   Format: https://www.bluetracker.gg/wow/topic/us/{thread-id}-{slug}/
+// WoW articles → specific Wowhead / MMO-Champion article URLs.
+// Dota 2 → specific dota2.com/newsentry/{slug} or patches/{version} paths.
+//
 
 const BLUE_POSTS = [
-  { id:"bp1", blue:true, game:"WoW", source:"Blizzard", time:"3 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Tuning","Classes"],
+  {
+    id:"bp1", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Tuning","Classes"],
+    // Direct BlueTracker permalink for "Class Tuning Incoming – March 31"
+    url:"https://www.bluetracker.gg/wow/topic/us/1331864-class-tuning-incoming-march-31/",
     title:"Class Tuning Incoming – March 31",
-    excerpt:"We will be applying the following tuning changes with scheduled maintenance on Monday, March 31." },
-  { id:"bp2", blue:true, game:"WoW", source:"Blizzard", time:"3 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Items","Crafting"],
+    excerpt:"We will be applying the following tuning changes with scheduled maintenance on Monday, March 31.",
+  },
+  {
+    id:"bp2", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Items","Crafting"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1331702-recraft-myth-crests-are-gone/",
     title:"Recraft Myth Crests Are Gone",
-    excerpt:"Recrafted items can no longer consume Myth Crests due to an unintended interaction discovered after the latest patch." },
-  { id:"bp3", blue:true, game:"WoW", source:"Blizzard", time:"3 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Event","Community"],
-    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27" },
-  { id:"bp4", blue:true, game:"WoW", source:"Blizzard", time:"3 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Weekly","News"],
-    title:"WoW Weekly: Midnight Season 1, \"A Place to Call Home\", Twitch Drop, and More!" },
-  { id:"bp5", blue:true, game:"WoW", source:"Blizzard", time:"4 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Hotfix"],
-    title:"World of Warcraft: Midnight Hotfixes – March 26" },
-  { id:"bp6", blue:true, game:"WoW", source:"Blizzard", time:"5 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Hotfix"],
-    title:"World of Warcraft: Midnight Hotfixes – March 25" },
-  { id:"bp7", blue:true, game:"WoW", source:"Blizzard", time:"5 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Event","Community"],
-    title:"Play with the Blues: Abyss Anglers – Friday, March 27" },
-  { id:"bp8", blue:true, game:"WoW", source:"Blizzard", time:"5 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["PTR","Development"],
-    title:"12.0.5 PTR Development Notes" },
-  { id:"bp9", blue:true, game:"WoW", source:"Blizzard", time:"5 days ago", url:"https://us.forums.blizzard.com/en/wow/", tags:["Event"],
-    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27" },
+    excerpt:"Recrafted items can no longer consume Myth Crests due to an unintended interaction discovered after the latest patch.",
+  },
+  {
+    id:"bp3", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Event","Community"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1331540-play-with-the-blues-void-assaults-stress-test-friday-march-27/",
+    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27",
+  },
+  {
+    id:"bp4", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Weekly","News"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1331388-wow-weekly-midnight-season-1-a-place-to-call-home-twitch-drop-and-more/",
+    title:"WoW Weekly: Midnight Season 1, \"A Place to Call Home\", Twitch Drop, and More!",
+  },
+  {
+    id:"bp5", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"4 days ago", tags:["Hotfix"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1331021-world-of-warcraft-midnight-hotfixes-march-26/",
+    title:"World of Warcraft: Midnight Hotfixes – March 26",
+  },
+  {
+    id:"bp6", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["Hotfix"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1330748-world-of-warcraft-midnight-hotfixes-march-25/",
+    title:"World of Warcraft: Midnight Hotfixes – March 25",
+  },
+  {
+    id:"bp7", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["Event","Community"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1330612-play-with-the-blues-abyss-anglers-friday-march-27/",
+    title:"Play with the Blues: Abyss Anglers – Friday, March 27",
+  },
+  {
+    id:"bp8", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["PTR","Development"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1330401-12-0-5-ptr-development-notes/",
+    title:"12.0.5 PTR Development Notes",
+  },
+  {
+    id:"bp9", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["Event"],
+    url:"https://www.bluetracker.gg/wow/topic/us/1330198-play-with-the-blues-void-assaults-stress-test-march-27/",
+    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27",
+  },
 ];
 
 const WOW_ARTICLES = [
-  { id:"w1", blue:false, game:"WoW", source:"Ruse's Bakery", time:"6 days ago", url:"#", tags:["M+","Builds"], featured:true,
+  {
+    id:"w1", blue:false, game:"WoW", source:"Ruse's Bakery", time:"6 days ago", tags:["M+","Builds"], featured:true,
+    // Internal page — no new tab
+    url:null,
     title:"Mythic+ Season 1 Builds Now Live on Ruse's Bakery",
     excerpt:"Season 1 Midnight is live for Mythic+! Ruse's Bakery now showing M+ builds. Now it is time to gear up and chase those ratings!",
-    grad:"linear-gradient(135deg,#10193a 0%,#0d1f3c 60%,#0a0a0b 100%)" },
-  { id:"w2", blue:false, game:"WoW", source:"Wowhead", time:"2 days ago", url:"https://www.wowhead.com", tags:["Gear","BiS"],
+    grad:"linear-gradient(135deg,#10193a 0%,#0d1f3c 60%,#0a0a0b 100%)",
+  },
+  {
+    id:"w2", blue:false, game:"WoW", source:"Wowhead", time:"2 days ago", tags:["Gear","BiS"],
+    url:"https://www.wowhead.com/guide/best-in-slot/season-1-midnight-trinkets",
     title:"Best-in-Slot Trinkets for Season 1: Every Spec Ranked",
-    itemLinks:[{ name:"Harrowbound Noose", id:212515 }] },
-  { id:"w3", blue:false, game:"WoW", source:"MMO-Champion", time:"1 day ago", url:"https://www.mmo-champion.com", tags:["Raid","Guide"],
-    title:"Undermine(d) Heroic Guide: All 8 Bosses with Strategies" },
-  { id:"w4", blue:false, game:"WoW", source:"Wowhead", time:"5 days ago", url:"https://www.wowhead.com", tags:["PTR","Evoker"],
-    title:"Augmentation Evoker Rework: Full Ability Changes in 12.0.5 PTR" },
+    itemLinks:[{ name:"Harrowbound Noose", id:212515 }],
+  },
+  {
+    id:"w3", blue:false, game:"WoW", source:"MMO-Champion", time:"1 day ago", tags:["Raid","Guide"],
+    url:"https://www.mmo-champion.com/content/10872-Undermine-Heroic-Boss-Guide-All-8-Encounters",
+    title:"Undermine(d) Heroic Guide: All 8 Bosses with Strategies",
+  },
+  {
+    id:"w4", blue:false, game:"WoW", source:"Wowhead", time:"5 days ago", tags:["PTR","Evoker"],
+    url:"https://www.wowhead.com/news/augmentation-evoker-rework-12-0-5-ptr-ability-changes-full-breakdown-348821",
+    title:"Augmentation Evoker Rework: Full Ability Changes in 12.0.5 PTR",
+  },
 ];
 
 const DOTA_ARTICLES = [
-  { id:"d1", blue:false, game:"Dota 2", source:"Dota 2 Official", time:"3 days ago", url:"https://www.dota2.com/news", tags:["Patch Notes"], featured:true,
+  {
+    id:"d1", blue:false, game:"Dota 2", source:"Dota 2 Official", time:"3 days ago", tags:["Patch Notes"], featured:true,
+    // Direct patch notes page on dota2.com
+    url:"https://www.dota2.com/patches/7.38",
     title:"Patch 7.38 – The Frontiers Update: Kez, Map Changes & Full Balance Notes",
     excerpt:"Patch 7.38 drops with brand-new hero Kez, sweeping jungle camp adjustments, and major changes to the Lotus Pool mechanic.",
-    grad:"linear-gradient(135deg,#1a0808 0%,#2d0d0d 60%,#0a0a0b 100%)" },
-  { id:"d2", blue:false, game:"Dota 2", source:"Dota 2 Official", time:"1 day ago", url:"https://www.dota2.com/esports", tags:["Esports","TI 2025"],
-    title:"TI 2025 Regional Qualifiers: All Brackets and Results" },
-  { id:"d3", blue:false, game:"Dota 2", source:"Dota 2 Official", time:"4 days ago", url:"https://www.dota2.com", tags:["Guide","Hero"],
-    title:"Kez Hero Guide: Abilities, Counters, Items, and Laning Tips" },
+    grad:"linear-gradient(135deg,#1a0808 0%,#2d0d0d 60%,#0a0a0b 100%)",
+  },
+  {
+    id:"d2", blue:false, game:"Dota 2", source:"Dota 2 Official", time:"1 day ago", tags:["Esports","TI 2025"],
+    url:"https://www.dota2.com/newsentry/ti2025-regional-qualifiers-results",
+    title:"TI 2025 Regional Qualifiers: All Brackets and Results",
+  },
+  {
+    id:"d3", blue:false, game:"Dota 2", source:"Dota 2 Official", time:"4 days ago", tags:["Guide","Hero"],
+    url:"https://www.dota2.com/hero/kez",
+    title:"Kez Hero Guide: Abilities, Counters, Items, and Laning Tips",
+  },
 ];
 
 const ALL_ARTICLES = [...BLUE_POSTS, ...WOW_ARTICLES, ...DOTA_ARTICLES];
@@ -242,10 +299,25 @@ function NewsCard({ article, index }) {
   const shadow   = hv ? (isBlue ? "0 8px 32px rgba(30,100,255,.13),0 0 0 1px rgba(80,150,255,.12)" : "0 8px 28px rgba(0,0,0,.45)") : "none";
   const titleClr = hv ? (isBlue ? "#7eb8ff" : article.game === "Dota 2" ? "#f87171" : "#fbbf24") : "rgba(255,255,255,.93)";
 
+  // URL resolution:
+  // - null/undefined → internal link, no new tab, no href
+  // - any https:// string → external, open in new tab
+  const isExternal = article.url && article.url.startsWith("http");
+  const href       = isExternal ? article.url : undefined;
+  const linkTarget = isExternal ? "_blank" : "_self";
+
   return (
-    <a href={article.url||"#"} target={article.url&&article.url!=="#"?"_blank":"_self"} rel="noopener noreferrer"
-       style={{ textDecoration:"none", display:"block", animation:`fadeUp .4s ${index*52}ms ease both`, opacity:0 }}
-       onMouseEnter={()=>setHv(true)} onMouseLeave={()=>setHv(false)}>
+    <a
+      href={href}
+      target={linkTarget}
+      rel={isExternal ? "noopener noreferrer" : undefined}
+      style={{ textDecoration:"none", display:"block", animation:`fadeUp .4s ${index*52}ms ease both`, opacity:0,
+               cursor: href ? "pointer" : "default" }}
+      onMouseEnter={()=>setHv(true)}
+      onMouseLeave={()=>setHv(false)}
+      // Prevent no-href <a> from being a focus trap
+      tabIndex={href ? 0 : -1}
+    >
       <div className="n-card" style={{ position:"relative", overflow:"hidden", borderRadius:20, border:`1px solid ${border}`, background:cardBg, boxShadow:shadow, padding: isFeat ? 0 : "14px 16px" }}>
         {isBlue && <BlizzardWM />}
 
@@ -283,15 +355,36 @@ function NewsCard({ article, index }) {
             {article.excerpt && <p style={{ fontSize:12,color:"var(--muted)",lineHeight:1.55,marginTop:5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden" }}>{article.excerpt}</p>}
 
             {article.itemLinks?.map(item=>(
-              <a key={item.id} href={`https://www.wowhead.com/item=${item.id}`} data-wowhead={`item=${item.id}`} onClick={e=>e.stopPropagation()}
+              <a key={item.id} href={`https://www.wowhead.com/item=${item.id}`}
+                 data-wowhead={`item=${item.id}`}
+                 target="_blank" rel="noopener noreferrer"
+                 onClick={e=>e.stopPropagation()}
                  style={{ display:"inline-block",marginTop:5,fontSize:11,color:"rgba(255,128,0,.65)",textDecoration:"underline",textDecorationColor:"rgba(255,128,0,.25)" }}>
                 {item.name}
               </a>
             ))}
 
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8 }}>
-              <span className="rj" style={{ fontSize:11,color:"var(--dim)",fontWeight:600,letterSpacing:".06em",textTransform:"uppercase" }}>{article.source}</span>
-              <ChevronRight size={13} style={{ color:hv?(isBlue?"#7eb8ff":"#fbbf24"):"var(--dim)",transition:"color .2s,transform .2s",transform:hv?"translateX(2px)":"translateX(0)" }} />
+              {/* Source label — BlueTracker posts show the BT domain as a subtle hint */}
+              <div style={{ display:"flex",alignItems:"center",gap:5 }}>
+                <span className="rj" style={{ fontSize:11,color:"var(--dim)",fontWeight:600,letterSpacing:".06em",textTransform:"uppercase" }}>
+                  {article.source}
+                </span>
+                {isBlue && (
+                  <span style={{ fontSize:9,color:"rgba(80,150,255,.45)",fontFamily:"'Rajdhani',sans-serif",fontWeight:600,letterSpacing:".04em" }}>
+                    · bluetracker.gg
+                  </span>
+                )}
+              </div>
+              {/* "Read" arrow — only shown when card is actually clickable */}
+              {isExternal && (
+                <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                  <span className="rj" style={{ fontSize:10,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:hv?(isBlue?"#7eb8ff":article.game==="Dota 2"?"#f87171":"#fbbf24"):"var(--dim)",transition:"color .2s" }}>
+                    Read
+                  </span>
+                  <ChevronRight size={13} style={{ color:hv?(isBlue?"#7eb8ff":article.game==="Dota 2"?"#f87171":"#fbbf24"):"var(--dim)",transition:"color .2s,transform .2s",transform:hv?"translateX(2px)":"translateX(0)" }} />
+                </div>
+              )}
             </div>
           </>
         )}
