@@ -51,6 +51,21 @@ const GLOBAL_CSS = `
     0%,100% { opacity:1; box-shadow:0 0 5px #22c55e; }
     50%      { opacity:0.35; box-shadow:0 0 1px #22c55e; }
   }
+  @keyframes float1 {
+    0%,100% { transform: translate(0,   0)   scale(1);    }
+    33%      { transform: translate(-40px, 30px) scale(1.08); }
+    66%      { transform: translate(30px, -20px) scale(0.95); }
+  }
+  @keyframes float2 {
+    0%,100% { transform: translate(0,   0)   scale(1);    }
+    40%      { transform: translate(50px, -40px) scale(1.1);  }
+    70%      { transform: translate(-20px, 30px) scale(0.92); }
+  }
+  @keyframes float3 {
+    0%,100% { transform: translate(0,   0)   scale(1);    }
+    30%      { transform: translate(-30px,-30px) scale(1.06); }
+    65%      { transform: translate(40px, 20px)  scale(0.96); }
+  }
   @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   @keyframes shimmer {
     0%   { background-position:-400px 0; }
@@ -449,24 +464,24 @@ function CommCard({ card, index }) {
 const ROLES = [
   {
     label: "DPS",
-    url:   "https://murlok.io/meta/pve/dps",
-    col:   "#f97316",                    // orange
+    url:   "https://murlok.io/meta/dps/m+",
+    col:   "#f97316",
     glow:  "rgba(249,115,22,0.30)",
     border:"rgba(249,115,22,0.55)",
     icon:  "https://render.worldofwarcraft.com/us/icons/56/ability_backstab.jpg",
   },
   {
     label: "HEALER",
-    url:   "https://murlok.io/meta/pve/healer",
-    col:   "#22c55e",                    // green
+    url:   "https://murlok.io/meta/healer/m+",
+    col:   "#22c55e",
     glow:  "rgba(34,197,94,0.28)",
     border:"rgba(34,197,94,0.55)",
     icon:  "https://render.worldofwarcraft.com/us/icons/56/spell_holy_flashheal.jpg",
   },
   {
     label: "TANK",
-    url:   "https://murlok.io/meta/pve/tank",
-    col:   "#3b82f6",                    // blue
+    url:   "https://murlok.io/meta/tank/m+",
+    col:   "#3b82f6",
     glow:  "rgba(59,130,246,0.28)",
     border:"rgba(59,130,246,0.55)",
     icon:  "https://render.worldofwarcraft.com/us/icons/56/ability_defend.jpg",
@@ -603,77 +618,129 @@ function Header({ scrolled }) {
 }
 
 // ─── RSS helpers ─────────────────────────────────────────────────────────────
+// ─── RSS fetch — multi-proxy fallback ────────────────────────────────────────
 //
-// BlueTracker exposes a standard RSS 2.0 feed.  We route it through the free
-// allorigins.win CORS proxy so the browser can read it without a backend.
-// If the fetch fails we silently fall back to the static BLUE_POSTS mock data.
+// Three independent CORS proxies tried in order.  If one fails the next is
+// attempted automatically, so a single unreachable proxy never blocks the feed.
 //
-const BT_RSS   = "https://www.bluetracker.gg/wow/feed/";
-const PROXY    = "https://api.allorigins.win/get?url=";
-// Auto-refresh interval: every 90 minutes (ms)
-const REFRESH_MS = 90 * 60 * 1000;
+//  1. corsproxy.io  – returns raw XML text directly
+//  2. allorigins    – returns JSON { contents: "<xml>..." }
+//  3. rss2json      – returns pre-parsed JSON { items: [...] }
+//
+const BT_RSS     = "https://www.bluetracker.gg/wow/feed/";
+const REFRESH_MS = 90 * 60 * 1000;   // auto-refresh every 90 minutes
 
-/** Relative-time formatter — turns a Date into "3m ago", "2h ago", "4d ago" */
+/** Relative-time: Date → "3m ago" / "2h ago" / "4d ago" */
 function relTime(date) {
   const s = Math.floor((Date.now() - date) / 1000);
-  if (s < 60)                    return `${s}s ago`;
-  if (s < 3600)                  return `${Math.floor(s/60)}m ago`;
-  if (s < 86400)                 return `${Math.floor(s/3600)}h ago`;
-  return `${Math.floor(s/86400)}d ago`;
+  if (s < 60)     return `${s}s ago`;
+  if (s < 3600)   return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400)  return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
-/** Format an absolute Date as a readable clock string, e.g. "14:32" */
 function clockStr(date) {
-  return date.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Derive category tags from a post title */
+function tagsFromTitle(title) {
+  const t = title.toLowerCase();
+  if (t.includes("hotfix"))     return ["Hotfix"];
+  if (t.includes("tuning"))     return ["Tuning", "Classes"];
+  if (t.includes("ptr"))        return ["PTR", "Development"];
+  if (t.includes("weekly"))     return ["Weekly", "News"];
+  if (t.includes("play with"))  return ["Event", "Community"];
+  if (t.includes("recraft"))    return ["Items", "Crafting"];
+  if (t.includes("season"))     return ["Season"];
+  return ["News"];
+}
+
+/** Shape a raw item object (from any proxy) into our article schema */
+function shapeItem(i, { title, link, pubDate, description }) {
+  const parsed  = pubDate ? new Date(pubDate) : new Date();
+  const excerpt = (description ?? "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&[a-z]+;/g, " ")
+    .slice(0, 200)
+    .trim() || undefined;
+  return {
+    id:     `bt-live-${i}`,
+    blue:   true,
+    game:   "WoW",
+    source: "Blizzard · BlueTracker",
+    time:   relTime(parsed),
+    _ts:    parsed,
+    url:    link ?? BT_RSS,
+    tags:   tagsFromTitle(title ?? ""),
+    title:  (title ?? "(no title)").trim(),
+    excerpt,
+  };
 }
 
 /**
- * Fetch BlueTracker RSS and return an array shaped like our article objects.
- * Returns null on any network or parse error.
+ * Try three independent CORS proxies in sequence.
+ * Returns an array of shaped article objects, or null if all three fail.
  */
 async function fetchBlueTracker() {
+  const encoded = encodeURIComponent(BT_RSS);
+
+  // ── Proxy 1: corsproxy.io — returns raw XML text ──────────────────────────
   try {
-    const res  = await fetch(PROXY + encodeURIComponent(BT_RSS));
-    const json = await res.json();
-    const xml  = new DOMParser().parseFromString(json.contents, "text/xml");
-    const items = Array.from(xml.querySelectorAll("item")).slice(0, 20);
+    const res  = await fetch(`https://corsproxy.io/?${encoded}`, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const text  = await res.text();
+      const xml   = new DOMParser().parseFromString(text, "text/xml");
+      const items = Array.from(xml.querySelectorAll("item")).slice(0, 25);
+      if (items.length > 0) {
+        return items.map((el, i) => shapeItem(i, {
+          title:       el.querySelector("title")?.textContent,
+          link:        el.querySelector("link")?.textContent,
+          pubDate:     el.querySelector("pubDate")?.textContent,
+          description: el.querySelector("description")?.textContent,
+        }));
+      }
+    }
+  } catch { /* fall through */ }
 
-    return items.map((item, i) => {
-      const title   = item.querySelector("title")?.textContent?.trim() ?? "(no title)";
-      const link    = item.querySelector("link")?.textContent?.trim()  ?? BT_RSS;
-      const pubDate = item.querySelector("pubDate")?.textContent?.trim();
-      const desc    = item.querySelector("description")?.textContent?.trim() ?? "";
-      const parsed  = pubDate ? new Date(pubDate) : new Date();
+  // ── Proxy 2: allorigins.win — returns JSON { contents } ───────────────────
+  try {
+    const res  = await fetch(`https://api.allorigins.win/get?url=${encoded}`, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const json  = await res.json();
+      const xml   = new DOMParser().parseFromString(json.contents ?? "", "text/xml");
+      const items = Array.from(xml.querySelectorAll("item")).slice(0, 25);
+      if (items.length > 0) {
+        return items.map((el, i) => shapeItem(i, {
+          title:       el.querySelector("title")?.textContent,
+          link:        el.querySelector("link")?.textContent,
+          pubDate:     el.querySelector("pubDate")?.textContent,
+          description: el.querySelector("description")?.textContent,
+        }));
+      }
+    }
+  } catch { /* fall through */ }
 
-      // Strip HTML tags from description snippet
-      const excerpt = desc.replace(/<[^>]+>/g, "").slice(0, 180).trim() || undefined;
+  // ── Proxy 3: rss2json — pre-parsed JSON { items: [...] } ──────────────────
+  try {
+    const res  = await fetch(
+      `https://api.rss2json.com/v1/api.json?rss_url=${encoded}&count=25`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      if (json.status === "ok" && json.items?.length > 0) {
+        return json.items.slice(0, 25).map((item, i) => shapeItem(i, {
+          title:       item.title,
+          link:        item.link,
+          pubDate:     item.pubDate,
+          description: item.description,
+        }));
+      }
+    }
+  } catch { /* fall through */ }
 
-      // Guess category tag from title keywords
-      const tl = title.toLowerCase();
-      const tags = tl.includes("hotfix")      ? ["Hotfix"]
-                 : tl.includes("tuning")      ? ["Tuning","Classes"]
-                 : tl.includes("ptr")         ? ["PTR","Development"]
-                 : tl.includes("weekly")      ? ["Weekly","News"]
-                 : tl.includes("play with")   ? ["Event","Community"]
-                 : tl.includes("recraft")     ? ["Items","Crafting"]
-                 : ["News"];
-
-      return {
-        id:     `bt-live-${i}`,
-        blue:   true,
-        game:   "WoW",
-        source: "Blizzard · BlueTracker",
-        time:   relTime(parsed),
-        _ts:    parsed,           // keep raw date for re-formatting on re-render
-        url:    link,
-        tags,
-        title,
-        excerpt,
-      };
-    });
-  } catch {
-    return null;  // caller falls back to mock data
-  }
+  return null;  // all three proxies failed → caller uses mock data
 }
 
 // ─── News Section ─────────────────────────────────────────────────────────────
@@ -685,8 +752,7 @@ const TABS = [
   { id:"blue", label:"BLUE POSTS" },
 ];
 
-function NewsSection() {
-  const [tab,         setTab]         = useState("all");
+function NewsSection({ tab, setTab }) {
   // livePosts: null = not yet fetched | [] = fetch failed / empty | [...] = success
   const [livePosts,   setLivePosts]   = useState(null);
   const [fetching,    setFetching]    = useState(false);
@@ -898,36 +964,206 @@ function CommunitySection() {
   );
 }
 
+// ─── Dynamic background config ────────────────────────────────────────────────
+
+const BG_THEMES = {
+  all: {
+    // Neutral dark — subtle star-field feel
+    bg:      "#0a0a0b",
+    grad:    "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,101,242,0.12) 0%, transparent 70%)",
+    accent:  "rgba(88,101,242,0.06)",
+    label:   null,
+  },
+  wow: {
+    // World of Warcraft — deep sapphire / arcane gold
+    bg:      "#07090f",
+    grad:    `
+      radial-gradient(ellipse 100% 60% at 50% -5%,  rgba(30,80,200,0.28) 0%, transparent 65%),
+      radial-gradient(ellipse 60%  40% at 85% 20%,  rgba(180,130,20,0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 40%  30% at 10% 40%,  rgba(100,40,200,0.12) 0%, transparent 55%)
+    `,
+    accent:  "rgba(30,80,200,0.08)",
+    label:   "WORLD OF WARCRAFT",
+    color:   "#3b82f6",
+  },
+  dota: {
+    // Dota 2 — blood-red ember glow
+    bg:      "#0b0707",
+    grad:    `
+      radial-gradient(ellipse 100% 60% at 50% -5%,  rgba(180,30,20,0.30) 0%, transparent 65%),
+      radial-gradient(ellipse 50%  35% at 80% 25%,  rgba(220,80,20,0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 40%  30% at 15% 35%,  rgba(120,20,60,0.12) 0%, transparent 55%)
+    `,
+    accent:  "rgba(180,30,20,0.08)",
+    label:   "DOTA 2",
+    color:   "#ef4444",
+  },
+  blue: {
+    // Blizzard Blue Posts — icy covenant blue
+    bg:      "#060c14",
+    grad:    `
+      radial-gradient(ellipse 90%  55% at 50% -8%,  rgba(30,100,255,0.30) 0%, transparent 65%),
+      radial-gradient(ellipse 45%  30% at 80% 20%,  rgba(80,180,255,0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 35%  25% at 12% 45%,  rgba(20,60,200,0.12) 0%, transparent 55%)
+    `,
+    accent:  "rgba(30,100,255,0.08)",
+    label:   "BLUE POSTS",
+    color:   "#60a5fa",
+  },
+};
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [scrolled, setScrolled] = useState(false);
-  useEffect(()=>{
-    const fn = ()=>setScrolled(window.scrollY>20);
-    window.addEventListener("scroll",fn,{passive:true});
-    return ()=>window.removeEventListener("scroll",fn);
-  },[]);
+  const [tab,      setTab]      = useState("all");
+  const [prevTab,  setPrevTab]  = useState("all");
+  const [bgOpacity, setBgOpacity] = useState(1);
+
+  // Scroll listener
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", fn, { passive: true });
+    return () => window.removeEventListener("scroll", fn);
+  }, []);
+
+  // Crossfade background on tab change
+  const handleTabChange = useCallback((newTab) => {
+    if (newTab === tab) return;
+    setBgOpacity(0);
+    setTimeout(() => {
+      setPrevTab(tab);
+      setTab(newTab);
+      setBgOpacity(1);
+    }, 180);
+  }, [tab]);
+
+  const theme = BG_THEMES[tab] ?? BG_THEMES.all;
 
   return (
     <>
       <style>{GLOBAL_CSS}</style>
-      <Header scrolled={scrolled} />
-      <main style={{ maxWidth:900,margin:"0 auto",padding:"32px 20px 60px" }}>
-        <NewsSection />
-        <MetaRankings />
-        <CommunitySection />
-      </main>
-      <footer style={{ borderTop:"1px solid var(--border)",padding:"24px 20px",textAlign:"center" }}>
-        <div style={{ maxWidth:900,margin:"0 auto" }}>
-          <div className="stt" style={{ fontSize:14,color:"var(--dim)",letterSpacing:".15em",marginBottom:6 }}>RUSE'S BAKERY</div>
-          <p style={{ fontSize:11,color:"rgba(255,255,255,.12)",marginBottom:12 }}>Fan-made gaming news aggregator. Not affiliated with Blizzard Entertainment or Valve Corporation.</p>
-          <div style={{ display:"flex",justifyContent:"center",gap:20,flexWrap:"wrap" }}>
-            {[["Discord","#5865f2","https://discord.gg/3yKHBx3JZ"],["Wowhead","#ff8000","https://www.wowhead.com"],["MMO-Champion","#4da6ff","https://www.mmo-champion.com"],["Dota 2","#c23c2a","https://www.dota2.com"]].map(([l,c,u])=>(
-              <a key={l} href={u} target="_blank" rel="noopener noreferrer" style={{ fontSize:11,color:c+"88",textDecoration:"none",fontFamily:"'Rajdhani',sans-serif",fontWeight:600,letterSpacing:".06em" }}>{l.toUpperCase()}</a>
-            ))}
-          </div>
+
+      {/* ── Dynamic game background ── */}
+      <div style={{
+        position:   "fixed",
+        inset:      0,
+        zIndex:     0,
+        background: theme.bg,
+        transition: "background 0.6s ease",
+        pointerEvents: "none",
+      }} />
+
+      {/* Gradient overlay — crossfades on tab switch */}
+      <div style={{
+        position:   "fixed",
+        inset:      0,
+        zIndex:     1,
+        background: theme.grad,
+        opacity:    bgOpacity,
+        transition: "opacity 0.35s ease, background 0.35s ease",
+        pointerEvents: "none",
+      }} />
+
+      {/* Subtle vignette */}
+      <div style={{
+        position:   "fixed",
+        inset:      0,
+        zIndex:     2,
+        background: "radial-gradient(ellipse 120% 120% at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 100%)",
+        pointerEvents: "none",
+      }} />
+
+      {/* ── Animated floating orbs ── */}
+      <div style={{ position:"fixed", inset:0, zIndex:2, overflow:"hidden", pointerEvents:"none" }}>
+        {/* Orb 1 */}
+        <div style={{
+          position: "absolute",
+          width: 400, height: 400,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.color ?? "#5865f2"}14 0%, transparent 70%)`,
+          top: "-10%", left: "60%",
+          animation: "float1 18s ease-in-out infinite",
+          transition: "background 0.6s ease",
+        }} />
+        {/* Orb 2 */}
+        <div style={{
+          position: "absolute",
+          width: 300, height: 300,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.color ?? "#a78bfa"}10 0%, transparent 70%)`,
+          top: "30%", left: "-5%",
+          animation: "float2 22s ease-in-out infinite",
+          transition: "background 0.6s ease",
+        }} />
+        {/* Orb 3 */}
+        <div style={{
+          position: "absolute",
+          width: 250, height: 250,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.color ?? "#3b82f6"}0d 0%, transparent 70%)`,
+          bottom: "10%", right: "5%",
+          animation: "float3 26s ease-in-out infinite",
+          transition: "background 0.6s ease",
+        }} />
+      </div>
+
+      {/* ── Game label watermark ── */}
+      {theme.label && (
+        <div style={{
+          position:   "fixed",
+          top:        "50%",
+          left:       "50%",
+          transform:  "translate(-50%, -50%)",
+          zIndex:     2,
+          fontFamily: "'Bebas Neue', sans-serif",
+          fontSize:   "clamp(80px, 18vw, 200px)",
+          letterSpacing: "0.12em",
+          color:      "transparent",
+          WebkitTextStroke: `1px ${theme.color ?? "#fff"}`,
+          opacity:    0.028,
+          whiteSpace: "nowrap",
+          userSelect: "none",
+          pointerEvents: "none",
+          transition: "opacity 0.5s ease",
+        }}>
+          {theme.label}
         </div>
-      </footer>
+      )}
+
+      {/* ── All page content above backgrounds ── */}
+      <div style={{ position: "relative", zIndex: 10 }}>
+        <Header scrolled={scrolled} />
+        <main style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px 60px" }}>
+          <NewsSection tab={tab} setTab={handleTabChange} />
+          <MetaRankings />
+          <CommunitySection />
+        </main>
+        <footer style={{ borderTop:"1px solid var(--border)", padding:"24px 20px", textAlign:"center" }}>
+          <div style={{ maxWidth:900, margin:"0 auto" }}>
+            <div className="stt" style={{ fontSize:14, color:"var(--dim)", letterSpacing:".15em", marginBottom:6 }}>
+              RUSE'S BAKERY
+            </div>
+            <p style={{ fontSize:11, color:"rgba(255,255,255,.12)", marginBottom:12 }}>
+              Fan-made gaming news aggregator. Not affiliated with Blizzard Entertainment or Valve Corporation.
+            </p>
+            <div style={{ display:"flex", justifyContent:"center", gap:20, flexWrap:"wrap" }}>
+              {[
+                ["Discord",     "#5865f2", "https://discord.gg/3yKHBx3JZ"],
+                ["Wowhead",     "#ff8000", "https://www.wowhead.com"],
+                ["MMO-Champion","#4da6ff", "https://www.mmo-champion.com"],
+                ["Dota 2",      "#c23c2a", "https://www.dota2.com"],
+              ].map(([l, c, u]) => (
+                <a key={l} href={u} target="_blank" rel="noopener noreferrer"
+                   style={{ fontSize:11, color:c+"88", textDecoration:"none",
+                     fontFamily:"'Rajdhani',sans-serif", fontWeight:600, letterSpacing:".06em" }}>
+                  {l.toUpperCase()}
+                </a>
+              ))}
+            </div>
+          </div>
+        </footer>
+      </div>
     </>
   );
 }
