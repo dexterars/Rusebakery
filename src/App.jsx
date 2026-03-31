@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  Bell, ExternalLink, RefreshCw, Sword, Shield, Plus,
-  ChevronRight, Rss, Gamepad2, Globe,
+  Bell, ExternalLink, RefreshCw,
+  ChevronRight, Rss,
 } from "lucide-react";
 
 // ─── Global CSS ───────────────────────────────────────────────────────────────
@@ -443,38 +443,132 @@ function CommCard({ card, index }) {
   );
 }
 
-// ─── Meta Rankings (image_2 left section) ────────────────────────────────────
+// ─── Meta Rankings ────────────────────────────────────────────────────────────
+
+const ROLES = [
+  {
+    label: "DPS",
+    url:   "https://murlok.io/meta/pve/dps",
+    col:   "#f97316",                    // orange
+    glow:  "rgba(249,115,22,0.30)",
+    border:"rgba(249,115,22,0.55)",
+    icon:  "https://render.worldofwarcraft.com/us/icons/56/ability_backstab.jpg",
+  },
+  {
+    label: "HEALER",
+    url:   "https://murlok.io/meta/pve/healer",
+    col:   "#22c55e",                    // green
+    glow:  "rgba(34,197,94,0.28)",
+    border:"rgba(34,197,94,0.55)",
+    icon:  "https://render.worldofwarcraft.com/us/icons/56/spell_holy_flashheal.jpg",
+  },
+  {
+    label: "TANK",
+    url:   "https://murlok.io/meta/pve/tank",
+    col:   "#3b82f6",                    // blue
+    glow:  "rgba(59,130,246,0.28)",
+    border:"rgba(59,130,246,0.55)",
+    icon:  "https://render.worldofwarcraft.com/us/icons/56/ability_defend.jpg",
+  },
+];
+
+function RoleCapsule({ role }) {
+  const [hv, setHv] = useState(false);
+  return (
+    <a
+      href={role.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ textDecoration: "none", display: "block" }}
+      onMouseEnter={() => setHv(true)}
+      onMouseLeave={() => setHv(false)}
+    >
+      <div style={{
+        /* ── Capsule shell ── */
+        display:        "flex",
+        alignItems:     "center",
+        gap:            12,
+        padding:        "10px 20px 10px 10px",
+        borderRadius:   50,                        // full pill
+        border:         `1px solid ${hv ? role.border : role.col + "30"}`,
+        background:     hv
+          ? `rgba(0,0,0,0.82)`
+          : `rgba(0,0,0,0.70)`,
+        backdropFilter: "blur(10px)",
+        boxShadow:      hv
+          ? `0 0 0 1px ${role.border}, 0 8px 28px ${role.glow}`
+          : `0 0 0 1px ${role.col}18`,
+        cursor:         "pointer",
+        /* ── Scale-up hover ── */
+        transform:      hv ? "scale(1.05)" : "scale(1)",
+        transition:     "transform .22s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease",
+        userSelect:     "none",
+        willChange:     "transform",
+      }}>
+
+        {/* Role icon — rounded square with coloured ring */}
+        <div style={{
+          width:       42,
+          height:      42,
+          borderRadius: 50,
+          border:      `2px solid ${hv ? role.col : role.col + "60"}`,
+          overflow:    "hidden",
+          flexShrink:  0,
+          boxShadow:   hv ? `0 0 10px ${role.glow}` : "none",
+          transition:  "border-color .22s, box-shadow .22s",
+        }}>
+          <img
+            src={role.icon}
+            alt={role.label}
+            width={42}
+            height={42}
+            style={{ display:"block", width:"100%", height:"100%", objectFit:"cover" }}
+          />
+        </div>
+
+        {/* Label */}
+        <span className="stt" style={{
+          fontSize:      22,
+          letterSpacing: ".1em",
+          color:         hv ? "#fff" : "rgba(255,255,255,.82)",
+          transition:    "color .2s",
+          lineHeight:    1,
+        }}>
+          {role.label}
+        </span>
+
+        {/* Arrow — appears on hover */}
+        <span style={{
+          marginLeft:  "auto",
+          fontSize:    16,
+          color:       role.col,
+          opacity:     hv ? 1 : 0,
+          transform:   hv ? "translateX(0)" : "translateX(-4px)",
+          transition:  "opacity .2s, transform .2s",
+        }}>→</span>
+      </div>
+    </a>
+  );
+}
 
 function MetaRankings() {
-  const ROLES = [
-    { label:"DPS",    icon:<Sword size={17}/>,  col:"#ef4444" },
-    { label:"HEALER", icon:<Plus  size={17}/>,  col:"#22c55e" },
-    { label:"TANK",   icon:<Shield size={17}/>, col:"#3b82f6" },
-  ];
-  const [hv, setHv] = useState(null);
-
   return (
-    <div style={{ display:"grid",gridTemplateColumns:"200px 1fr",gap:20,alignItems:"center",marginBottom:36 }} className="meta-grid fu2">
+    <div style={{ display:"grid", gridTemplateColumns:"200px 1fr", gap:20, alignItems:"center", marginBottom:36 }}
+         className="meta-grid fu2">
+
+      {/* Left description */}
       <div className="meta-label">
-        <div className="stt" style={{ fontSize:26,color:"#fff",marginBottom:8 }}>META RANKINGS</div>
-        <p style={{ fontSize:12,color:"var(--muted)",lineHeight:1.65 }}>
-          Explore the meta and discover how each role ranks across class specializations. Select a role to view top-performing classes.
+        <div className="stt" style={{ fontSize:26, color:"#fff", marginBottom:8 }}>META RANKINGS</div>
+        <p style={{ fontSize:12, color:"var(--muted)", lineHeight:1.65 }}>
+          Explore the meta and discover how each role ranks across class specializations.
+          Powered by <span style={{ color:"rgba(255,255,255,.4)" }}>murlok.io</span>.
         </p>
       </div>
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10 }} className="role-grid">
-        {ROLES.map(r=>(
-          <a key={r.label} href="#" style={{ textDecoration:"none" }} onMouseEnter={()=>setHv(r.label)} onMouseLeave={()=>setHv(null)}>
-            <div className="role-card" style={{
-              borderRadius:18,padding:"20px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",
-              border:`1px solid ${hv===r.label?r.col+"55":"rgba(255,255,255,.06)"}`,
-              background:hv===r.label?`linear-gradient(135deg,${r.col}18 0%,transparent 100%)`:"#111113",
-              boxShadow:hv===r.label?`0 8px 24px ${r.col}22`:"none",
-            }}>
-              <div style={{ width:38,height:38,borderRadius:10,background:`${r.col}18`,border:`1px solid ${r.col}30`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:r.col }}>{r.icon}</div>
-              <span className="stt" style={{ fontSize:18,color:hv===r.label?"#fff":"rgba(255,255,255,.8)",transition:"color .2s" }}>{r.label}</span>
-            </div>
-          </a>
-        ))}
+
+      {/* Three capsule pills */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}
+           className="role-grid">
+        {ROLES.map(r => <RoleCapsule key={r.label} role={r} />)}
       </div>
     </div>
   );
