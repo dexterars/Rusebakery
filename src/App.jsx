@@ -138,61 +138,44 @@ const GLOBAL_CSS = `
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 //
-// Blue Posts → direct BlueTracker.gg permalink per thread.
-//   Format: https://www.bluetracker.gg/wow/topic/us/{thread-id}-{slug}/
-// WoW articles → specific Wowhead / MMO-Champion article URLs.
-// Dota 2 → specific dota2.com/newsentry/{slug} or patches/{version} paths.
+// BLUE_POSTS are the static fallback shown while the live RSS is loading,
+// or if all three proxy fetches fail.
+// url → always the real BlueTracker listing; live RSS replaces these with
+//        the exact per-thread permalinks once it loads successfully.
 //
 
+const BT_HOME = "https://www.bluetracker.gg/wow/";
+
 const BLUE_POSTS = [
-  {
-    id:"bp1", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Tuning","Classes"],
-    // Direct BlueTracker permalink for "Class Tuning Incoming – March 31"
-    url:"https://www.bluetracker.gg/wow/topic/us/1331864-class-tuning-incoming-march-31/",
+  { id:"bp1", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Tuning","Classes"],
+    url: BT_HOME,
     title:"Class Tuning Incoming – March 31",
-    excerpt:"We will be applying the following tuning changes with scheduled maintenance on Monday, March 31.",
-  },
-  {
-    id:"bp2", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Items","Crafting"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1331702-recraft-myth-crests-are-gone/",
+    excerpt:"We will be applying the following tuning changes with scheduled maintenance on Monday, March 31." },
+  { id:"bp2", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Items","Crafting"],
+    url: BT_HOME,
     title:"Recraft Myth Crests Are Gone",
-    excerpt:"Recrafted items can no longer consume Myth Crests due to an unintended interaction discovered after the latest patch.",
-  },
-  {
-    id:"bp3", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Event","Community"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1331540-play-with-the-blues-void-assaults-stress-test-friday-march-27/",
-    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27",
-  },
-  {
-    id:"bp4", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"3 days ago", tags:["Weekly","News"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1331388-wow-weekly-midnight-season-1-a-place-to-call-home-twitch-drop-and-more/",
-    title:"WoW Weekly: Midnight Season 1, \"A Place to Call Home\", Twitch Drop, and More!",
-  },
-  {
-    id:"bp5", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"4 days ago", tags:["Hotfix"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1331021-world-of-warcraft-midnight-hotfixes-march-26/",
-    title:"World of Warcraft: Midnight Hotfixes – March 26",
-  },
-  {
-    id:"bp6", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["Hotfix"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1330748-world-of-warcraft-midnight-hotfixes-march-25/",
-    title:"World of Warcraft: Midnight Hotfixes – March 25",
-  },
-  {
-    id:"bp7", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["Event","Community"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1330612-play-with-the-blues-abyss-anglers-friday-march-27/",
-    title:"Play with the Blues: Abyss Anglers – Friday, March 27",
-  },
-  {
-    id:"bp8", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["PTR","Development"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1330401-12-0-5-ptr-development-notes/",
-    title:"12.0.5 PTR Development Notes",
-  },
-  {
-    id:"bp9", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"5 days ago", tags:["Event"],
-    url:"https://www.bluetracker.gg/wow/topic/us/1330198-play-with-the-blues-void-assaults-stress-test-march-27/",
-    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27",
-  },
+    excerpt:"Recrafted items can no longer consume Myth Crests due to an unintended interaction discovered after the latest patch." },
+  { id:"bp3", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Event","Community"],
+    url: BT_HOME,
+    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27" },
+  { id:"bp4", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Weekly","News"],
+    url: BT_HOME,
+    title:"WoW Weekly: Midnight Season 1, \"A Place to Call Home\", Twitch Drop, and More!" },
+  { id:"bp5", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Hotfix"],
+    url: BT_HOME,
+    title:"World of Warcraft: Midnight Hotfixes – March 26" },
+  { id:"bp6", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Hotfix"],
+    url: BT_HOME,
+    title:"World of Warcraft: Midnight Hotfixes – March 25" },
+  { id:"bp7", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Event","Community"],
+    url: BT_HOME,
+    title:"Play with the Blues: Abyss Anglers – Friday, March 27" },
+  { id:"bp8", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["PTR","Development"],
+    url: BT_HOME,
+    title:"12.0.5 PTR Development Notes" },
+  { id:"bp9", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Event"],
+    url: BT_HOME,
+    title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27" },
 ];
 
 const WOW_ARTICLES = [
@@ -661,9 +644,14 @@ function shapeItem(i, { title, link, pubDate, description }) {
   const parsed  = pubDate ? new Date(pubDate) : new Date();
   const excerpt = (description ?? "")
     .replace(/<[^>]+>/g, "")
-    .replace(/&[a-z]+;/g, " ")
+    .replace(/&[a-z#0-9]+;/g, " ")
+    .replace(/\s+/g, " ")
     .slice(0, 200)
     .trim() || undefined;
+
+  // Guarantee a valid URL — if the RSS gave us one, use it; else fall back to BT home
+  const safeUrl = (link && link.startsWith("http")) ? link : BT_HOME;
+
   return {
     id:     `bt-live-${i}`,
     blue:   true,
@@ -671,7 +659,7 @@ function shapeItem(i, { title, link, pubDate, description }) {
     source: "Blizzard · BlueTracker",
     time:   relTime(parsed),
     _ts:    parsed,
-    url:    link ?? BT_RSS,
+    url:    safeUrl,
     tags:   tagsFromTitle(title ?? ""),
     title:  (title ?? "(no title)").trim(),
     excerpt,
@@ -679,68 +667,90 @@ function shapeItem(i, { title, link, pubDate, description }) {
 }
 
 /**
- * Try three independent CORS proxies in sequence.
- * Returns an array of shaped article objects, or null if all three fail.
+ * fetchBlueTracker()
+ *
+ * Tries four strategies in order, stopping at the first success.
+ *
+ *  1. rss2json.com   — dedicated RSS-to-JSON API, most reliable, no XML parsing needed
+ *  2. corsproxy.io   — raw proxy, we parse XML ourselves
+ *  3. allorigins.win — JSON wrapper { contents }, we parse XML ourselves
+ *  4. thingproxy.freeboard.io — last resort raw proxy
+ *
+ * Returns an array of shaped article objects, or null if every strategy fails.
  */
 async function fetchBlueTracker() {
   const encoded = encodeURIComponent(BT_RSS);
+  const TIMEOUT = 9000;
 
-  // ── Proxy 1: corsproxy.io — returns raw XML text ──────────────────────────
-  try {
-    const res  = await fetch(`https://corsproxy.io/?${encoded}`, { signal: AbortSignal.timeout(8000) });
-    if (res.ok) {
-      const text  = await res.text();
-      const xml   = new DOMParser().parseFromString(text, "text/xml");
-      const items = Array.from(xml.querySelectorAll("item")).slice(0, 25);
-      if (items.length > 0) {
-        return items.map((el, i) => shapeItem(i, {
-          title:       el.querySelector("title")?.textContent,
-          link:        el.querySelector("link")?.textContent,
-          pubDate:     el.querySelector("pubDate")?.textContent,
-          description: el.querySelector("description")?.textContent,
-        }));
-      }
-    }
-  } catch { /* fall through */ }
+  // ── Shared XML parser (used by strategies 2-4) ──────────────────────────────
+  function parseXML(text) {
+    const xml   = new DOMParser().parseFromString(text, "text/xml");
+    const items = Array.from(xml.querySelectorAll("item")).slice(0, 30);
+    if (items.length === 0) return null;
+    return items.map((el, i) => {
+      // <link> in RSS 2.0 is a plain text node between the tag — NOT an attribute.
+      // We must walk the siblings of the <link> element to get the text.
+      const linkEl  = el.querySelector("link");
+      const rawLink = linkEl
+        ? (linkEl.textContent?.trim() || linkEl.nextSibling?.textContent?.trim())
+        : undefined;
+      return shapeItem(i, {
+        title:       el.querySelector("title")?.textContent,
+        link:        rawLink,
+        pubDate:     el.querySelector("pubDate")?.textContent,
+        description: el.querySelector("description")?.textContent,
+      });
+    });
+  }
 
-  // ── Proxy 2: allorigins.win — returns JSON { contents } ───────────────────
+  // ── Strategy 1: rss2json.com ─────────────────────────────────────────────────
   try {
-    const res  = await fetch(`https://api.allorigins.win/get?url=${encoded}`, { signal: AbortSignal.timeout(8000) });
-    if (res.ok) {
-      const json  = await res.json();
-      const xml   = new DOMParser().parseFromString(json.contents ?? "", "text/xml");
-      const items = Array.from(xml.querySelectorAll("item")).slice(0, 25);
-      if (items.length > 0) {
-        return items.map((el, i) => shapeItem(i, {
-          title:       el.querySelector("title")?.textContent,
-          link:        el.querySelector("link")?.textContent,
-          pubDate:     el.querySelector("pubDate")?.textContent,
-          description: el.querySelector("description")?.textContent,
-        }));
-      }
-    }
-  } catch { /* fall through */ }
-
-  // ── Proxy 3: rss2json — pre-parsed JSON { items: [...] } ──────────────────
-  try {
-    const res  = await fetch(
-      `https://api.rss2json.com/v1/api.json?rss_url=${encoded}&count=25`,
-      { signal: AbortSignal.timeout(8000) }
+    const res = await fetch(
+      `https://api.rss2json.com/v1/api.json?rss_url=${encoded}&count=30&order_by=pubDate&order_dir=desc`,
+      { signal: AbortSignal.timeout(TIMEOUT) }
     );
     if (res.ok) {
       const json = await res.json();
       if (json.status === "ok" && json.items?.length > 0) {
-        return json.items.slice(0, 25).map((item, i) => shapeItem(i, {
+        return json.items.map((item, i) => shapeItem(i, {
           title:       item.title,
           link:        item.link,
           pubDate:     item.pubDate,
-          description: item.description,
+          description: item.description ?? item.content,
         }));
       }
     }
   } catch { /* fall through */ }
 
-  return null;  // all three proxies failed → caller uses mock data
+  // ── Strategy 2: corsproxy.io ─────────────────────────────────────────────────
+  try {
+    const res = await fetch(`https://corsproxy.io/?${encoded}`, { signal: AbortSignal.timeout(TIMEOUT) });
+    if (res.ok) {
+      const result = parseXML(await res.text());
+      if (result) return result;
+    }
+  } catch { /* fall through */ }
+
+  // ── Strategy 3: allorigins.win ───────────────────────────────────────────────
+  try {
+    const res = await fetch(`https://api.allorigins.win/get?url=${encoded}`, { signal: AbortSignal.timeout(TIMEOUT) });
+    if (res.ok) {
+      const json = await res.json();
+      const result = parseXML(json.contents ?? "");
+      if (result) return result;
+    }
+  } catch { /* fall through */ }
+
+  // ── Strategy 4: thingproxy (last resort) ─────────────────────────────────────
+  try {
+    const res = await fetch(`https://thingproxy.freeboard.io/fetch/${BT_RSS}`, { signal: AbortSignal.timeout(TIMEOUT) });
+    if (res.ok) {
+      const result = parseXML(await res.text());
+      if (result) return result;
+    }
+  } catch { /* fall through */ }
+
+  return null; // all strategies failed → use mock data
 }
 
 // ─── News Section ─────────────────────────────────────────────────────────────
@@ -849,7 +859,7 @@ function NewsSection({ tab, setTab }) {
             </span>
           )}
 
-          {/* Source badge */}
+          {/* Source badge — green when live data loaded */}
           {livePosts && !fetchError && (
             <span style={{ fontSize:9,padding:"2px 8px",borderRadius:6,
               background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)",
@@ -858,13 +868,17 @@ function NewsSection({ tab, setTab }) {
             </span>
           )}
 
-          {/* Error badge — shown only when live fetch failed and we're using mock */}
+          {/* Error badge — shows when all proxies failed; clicking opens BT directly */}
           {fetchError && (
-            <span style={{ fontSize:9,padding:"2px 8px",borderRadius:6,
-              background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",
-              color:"#f87171",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,letterSpacing:".1em" }}>
-              OFFLINE · CACHED DATA
-            </span>
+            <a href="https://www.bluetracker.gg/wow/" target="_blank" rel="noopener noreferrer"
+               title="Click to view BlueTracker directly"
+               style={{ fontSize:9,padding:"2px 10px",borderRadius:6, cursor:"pointer",
+                 background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",
+                 color:"#f87171",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,
+                 letterSpacing:".1em", textDecoration:"none",
+                 display:"flex",alignItems:"center",gap:5 }}>
+              ⚠ PROXY FAILED — CLICK TO VIEW ON BLUETRACKER.GG
+            </a>
           )}
 
           {/* Manual refresh button */}
