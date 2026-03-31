@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Bell, ExternalLink, RefreshCw,
   ChevronRight, Rss,
@@ -228,7 +228,8 @@ const DOTA_ARTICLES = [
   },
 ];
 
-const ALL_ARTICLES = [...BLUE_POSTS, ...WOW_ARTICLES, ...DOTA_ARTICLES];
+// ALL_ARTICLES is now assembled dynamically inside NewsSection
+// (live BlueTracker posts + static WOW_ARTICLES + DOTA_ARTICLES)
 
 // ─── Tag colours ──────────────────────────────────────────────────────────────
 
@@ -601,6 +602,80 @@ function Header({ scrolled }) {
   );
 }
 
+// ─── RSS helpers ─────────────────────────────────────────────────────────────
+//
+// BlueTracker exposes a standard RSS 2.0 feed.  We route it through the free
+// allorigins.win CORS proxy so the browser can read it without a backend.
+// If the fetch fails we silently fall back to the static BLUE_POSTS mock data.
+//
+const BT_RSS   = "https://www.bluetracker.gg/wow/feed/";
+const PROXY    = "https://api.allorigins.win/get?url=";
+// Auto-refresh interval: every 90 minutes (ms)
+const REFRESH_MS = 90 * 60 * 1000;
+
+/** Relative-time formatter — turns a Date into "3m ago", "2h ago", "4d ago" */
+function relTime(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)                    return `${s}s ago`;
+  if (s < 3600)                  return `${Math.floor(s/60)}m ago`;
+  if (s < 86400)                 return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+/** Format an absolute Date as a readable clock string, e.g. "14:32" */
+function clockStr(date) {
+  return date.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+}
+
+/**
+ * Fetch BlueTracker RSS and return an array shaped like our article objects.
+ * Returns null on any network or parse error.
+ */
+async function fetchBlueTracker() {
+  try {
+    const res  = await fetch(PROXY + encodeURIComponent(BT_RSS));
+    const json = await res.json();
+    const xml  = new DOMParser().parseFromString(json.contents, "text/xml");
+    const items = Array.from(xml.querySelectorAll("item")).slice(0, 20);
+
+    return items.map((item, i) => {
+      const title   = item.querySelector("title")?.textContent?.trim() ?? "(no title)";
+      const link    = item.querySelector("link")?.textContent?.trim()  ?? BT_RSS;
+      const pubDate = item.querySelector("pubDate")?.textContent?.trim();
+      const desc    = item.querySelector("description")?.textContent?.trim() ?? "";
+      const parsed  = pubDate ? new Date(pubDate) : new Date();
+
+      // Strip HTML tags from description snippet
+      const excerpt = desc.replace(/<[^>]+>/g, "").slice(0, 180).trim() || undefined;
+
+      // Guess category tag from title keywords
+      const tl = title.toLowerCase();
+      const tags = tl.includes("hotfix")      ? ["Hotfix"]
+                 : tl.includes("tuning")      ? ["Tuning","Classes"]
+                 : tl.includes("ptr")         ? ["PTR","Development"]
+                 : tl.includes("weekly")      ? ["Weekly","News"]
+                 : tl.includes("play with")   ? ["Event","Community"]
+                 : tl.includes("recraft")     ? ["Items","Crafting"]
+                 : ["News"];
+
+      return {
+        id:     `bt-live-${i}`,
+        blue:   true,
+        game:   "WoW",
+        source: "Blizzard · BlueTracker",
+        time:   relTime(parsed),
+        _ts:    parsed,           // keep raw date for re-formatting on re-render
+        url:    link,
+        tags,
+        title,
+        excerpt,
+      };
+    });
+  } catch {
+    return null;  // caller falls back to mock data
+  }
+}
+
 // ─── News Section ─────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -611,64 +686,189 @@ const TABS = [
 ];
 
 function NewsSection() {
-  const [tab, setTab] = useState("all");
-  const [age, setAge] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [tab,         setTab]         = useState("all");
+  // livePosts: null = not yet fetched | [] = fetch failed / empty | [...] = success
+  const [livePosts,   setLivePosts]   = useState(null);
+  const [fetching,    setFetching]    = useState(false);
+  const [fetchError,  setFetchError]  = useState(false);
+  const [lastFetched, setLastFetched] = useState(null); // Date object
+  const [tickAge,     setTickAge]     = useState(0);    // seconds since last fetch
 
-  useEffect(() => {
-    const iv = setInterval(()=>setAge(a=>a+1), 1000);
-    return ()=>clearInterval(iv);
+  // ── Core fetch function ──────────────────────────────────────────────────────
+  const doFetch = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setFetching(true);
+    setFetchError(false);
+    const posts = await fetchBlueTracker();
+    if (posts && posts.length > 0) {
+      setLivePosts(posts);
+      setFetchError(false);
+    } else {
+      // Keep whatever we had; just flag the error
+      setFetchError(true);
+    }
+    setLastFetched(new Date());
+    setTickAge(0);
+    setFetching(false);
   }, []);
 
-  const ageStr = age < 60 ? `${age}s ago` : "just now";
+  // ── Initial fetch + auto-refresh every 90 min ────────────────────────────────
+  useEffect(() => {
+    doFetch(true);                                       // immediate on mount
+    const iv = setInterval(() => doFetch(false), REFRESH_MS);
+    return () => clearInterval(iv);
+  }, [doFetch]);
 
-  const articles = ALL_ARTICLES.filter(a => {
-    if (tab==="all")  return true;
-    if (tab==="wow")  return a.game==="WoW";
-    if (tab==="dota") return a.game==="Dota 2";
-    if (tab==="blue") return a.blue;
+  // ── Tick "Xs ago" counter every second ──────────────────────────────────────
+  useEffect(() => {
+    const iv = setInterval(() => setTickAge(a => a + 1), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Age string shown in the header ──────────────────────────────────────────
+  const ageLabel = lastFetched
+    ? relTime(lastFetched).toUpperCase()
+    : "…";
+
+  // ── Next auto-refresh countdown ─────────────────────────────────────────────
+  const nextRefreshSec = lastFetched
+    ? Math.max(0, Math.round((REFRESH_MS / 1000) - tickAge))
+    : null;
+  const nextLabel = nextRefreshSec !== null
+    ? nextRefreshSec > 60
+      ? `next in ${Math.ceil(nextRefreshSec / 60)}m`
+      : `next in ${nextRefreshSec}s`
+    : "";
+
+  // ── Choose data source: live RSS > mock ─────────────────────────────────────
+  // Re-format relative times on every tick so they stay current
+  const bluePosts = (livePosts ?? BLUE_POSTS).map(a =>
+    a._ts ? { ...a, time: relTime(a._ts) } : a
+  );
+  const allArticles = [...bluePosts, ...WOW_ARTICLES, ...DOTA_ARTICLES];
+
+  const articles = allArticles.filter(a => {
+    if (tab === "all")  return true;
+    if (tab === "wow")  return a.game === "WoW";
+    if (tab === "dota") return a.game === "Dota 2";
+    if (tab === "blue") return a.blue;
     return true;
   });
 
-  const refresh = () => { setLoading(true); setAge(0); setTimeout(()=>setLoading(false), 850); };
+  // ── Manual refresh ───────────────────────────────────────────────────────────
+  const handleRefresh = () => doFetch(true);
 
   return (
     <section style={{ marginBottom:52 }}>
-      {/* Header */}
+
+      {/* ── Section header ── */}
       <div className="fu" style={{ display:"flex",flexDirection:"column",alignItems:"center",marginBottom:28 }}>
         <div style={{ display:"flex",alignItems:"center",gap:14,marginBottom:10 }}>
           <Bell size={30} color="#fff" strokeWidth={1.5} />
           <span className="stt" style={{ fontSize:34,color:"#fff",letterSpacing:".1em" }}>NEWS</span>
         </div>
-        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+
+        <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"center" }}>
+          {/* Live dot */}
           <div className="live-dot" />
+
+          {/* "Last updated X ago" */}
           <span className="rj" style={{ fontSize:11,color:"var(--muted)",fontWeight:600,letterSpacing:".06em" }}>
-            LIVE FEED · LAST UPDATED {ageStr.toUpperCase()}
+            LIVE FEED · UPDATED {ageLabel}
           </span>
-          <button onClick={refresh} style={{ background:"none",border:"none",cursor:"pointer",color:"var(--dim)",display:"flex",alignItems:"center",gap:4,fontSize:11,fontFamily:"'Rajdhani',sans-serif",fontWeight:600,letterSpacing:".06em",padding:"3px 8px",borderRadius:8,transition:"color .2s,background .2s" }}
-            onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,.05)";}}
-            onMouseLeave={e=>{e.currentTarget.style.color="var(--dim)";e.currentTarget.style.background="none";}}>
-            <RefreshCw size={11} style={{ animation:loading?"spin .8s linear infinite":"none" }} />
+
+          {/* Next auto-refresh hint */}
+          {nextLabel && (
+            <span className="rj" style={{ fontSize:10,color:"var(--dim)",fontWeight:600,letterSpacing:".04em" }}>
+              · {nextLabel}
+            </span>
+          )}
+
+          {/* Source badge */}
+          {livePosts && !fetchError && (
+            <span style={{ fontSize:9,padding:"2px 8px",borderRadius:6,
+              background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)",
+              color:"#4ade80",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,letterSpacing:".1em" }}>
+              LIVE · BLUETRACKER
+            </span>
+          )}
+
+          {/* Error badge — shown only when live fetch failed and we're using mock */}
+          {fetchError && (
+            <span style={{ fontSize:9,padding:"2px 8px",borderRadius:6,
+              background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",
+              color:"#f87171",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,letterSpacing:".1em" }}>
+              OFFLINE · CACHED DATA
+            </span>
+          )}
+
+          {/* Manual refresh button */}
+          <button
+            onClick={handleRefresh}
+            disabled={fetching}
+            style={{ background:"none",border:"none",cursor:fetching?"default":"pointer",
+              color:"var(--dim)",display:"flex",alignItems:"center",gap:4,
+              fontSize:11,fontFamily:"'Rajdhani',sans-serif",fontWeight:600,letterSpacing:".06em",
+              padding:"3px 8px",borderRadius:8,transition:"color .2s,background .2s",
+              opacity:fetching?0.5:1 }}
+            onMouseEnter={e=>{ if(!fetching){ e.currentTarget.style.color="#fff"; e.currentTarget.style.background="rgba(255,255,255,.05)"; }}}
+            onMouseLeave={e=>{ e.currentTarget.style.color="var(--dim)"; e.currentTarget.style.background="none"; }}>
+            <RefreshCw size={11} style={{ animation:fetching?"spin .8s linear infinite":"none" }} />
             REFRESH
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tab bar ── */}
       <div className="fu1" style={{ display:"flex",gap:4,background:"#111113",border:"1px solid var(--border)",borderRadius:17,padding:5,marginBottom:16 }}>
-        {TABS.map(t=>(
-          <button key={t.id} className={`tab-btn${tab===t.id?" on":""}`} onClick={()=>setTab(t.id)} style={{ flex:1 }}>{t.label}</button>
+        {TABS.map(t => (
+          <button key={t.id} className={`tab-btn${tab===t.id?" on":""}`}
+            onClick={()=>setTab(t.id)} style={{ flex:1 }}>
+            {t.label}
+            {/* Live count badge on BLUE POSTS tab */}
+            {t.id === "blue" && livePosts && (
+              <span style={{ marginLeft:5,fontSize:9,padding:"1px 6px",borderRadius:5,
+                background:"rgba(34,197,94,.12)",border:"1px solid rgba(34,197,94,.22)",
+                color:"#4ade80",verticalAlign:"middle",fontWeight:700 }}>
+                {livePosts.length}
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
-      {/* Cards */}
-      {loading ? (
+      {/* ── Cards ── */}
+      {fetching && livePosts === null ? (
+        // First-load skeleton
         <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          {[1,2,3,4,5].map(i=><div key={i} className="skeleton" style={{ height:76 }} />)}
+          {[1,2,3,4,5,6,7].map(i => (
+            <div key={i} className="skeleton" style={{ height:76, animationDelay:`${i*80}ms` }} />
+          ))}
         </div>
       ) : (
         <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          {articles.map((a,i)=><NewsCard key={a.id} article={a} index={i} />)}
+          {articles.map((a,i) => <NewsCard key={a.id} article={a} index={i} />)}
+          {articles.length === 0 && (
+            <div style={{ textAlign:"center",padding:"40px 0",color:"var(--dim)",
+              fontFamily:"'Rajdhani',sans-serif",fontSize:13,letterSpacing:".06em" }}>
+              NO ARTICLES IN THIS CATEGORY
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Footer: last fetch time + source link ── */}
+      {lastFetched && (
+        <div style={{ marginTop:16,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
+          <span className="rj" style={{ fontSize:10,color:"var(--dim)",fontWeight:600,letterSpacing:".04em" }}>
+            Last synced {clockStr(lastFetched)} · auto-refreshes every 90 min
+          </span>
+          <a href="https://www.bluetracker.gg/wow/" target="_blank" rel="noopener noreferrer"
+             style={{ fontSize:10,color:"rgba(80,150,255,.45)",fontFamily:"'Rajdhani',sans-serif",
+               fontWeight:600,textDecoration:"none",letterSpacing:".04em",transition:"color .2s" }}
+             onMouseEnter={e=>e.currentTarget.style.color="rgba(125,185,255,.8)"}
+             onMouseLeave={e=>e.currentTarget.style.color="rgba(80,150,255,.45)"}>
+            bluetracker.gg ↗
+          </a>
         </div>
       )}
     </section>
