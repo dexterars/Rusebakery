@@ -600,429 +600,192 @@ function Header({ scrolled }) {
   );
 }
 
-// ─── RSS helpers ─────────────────────────────────────────────────────────────
-// ─── RSS fetch — multi-proxy fallback ────────────────────────────────────────
-//
-// Three independent CORS proxies tried in order.  If one fails the next is
-// attempted automatically, so a single unreachable proxy never blocks the feed.
-//
-//  1. corsproxy.io  – returns raw XML text directly
-//  2. allorigins    – returns JSON { contents: "<xml>..." }
-//  3. rss2json      – returns pre-parsed JSON { items: [...] }
-//
-const BT_RSS     = "https://www.bluetracker.gg/wow/feed/";
-const REFRESH_MS = 90 * 60 * 1000;   // auto-refresh every 90 minutes
 
-/** Relative-time: Date → "3m ago" / "2h ago" / "4d ago" */
-function relTime(date) {
-  const s = Math.floor((Date.now() - date) / 1000);
-  if (s < 60)     return `${s}s ago`;
-  if (s < 3600)   return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400)  return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+// ─── RSS fetch — robust, three strategies + localStorage cache ────────────────
+//
+//  1. allorigins /raw  → raw XML text (no JSON wrapper, most direct)
+//  2. rss2json.com     → pre-parsed JSON (no XML parsing needed)
+//  3. corsproxy.io     → raw proxy last resort
+//
+//  localStorage "bt_cache" gives offline/proxy-failure resilience across reloads.
+//
+
+const BT_RSS     = "https://www.bluetracker.gg/wow/feed/";
+const BT_HOME    = "https://www.bluetracker.gg/wow/";
+const CACHE_KEY  = "bt_cache";
+const REFRESH_MS = 90 * 60 * 1000;
+
+/** Works in every browser — no AbortSignal.timeout() needed */
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+  ]);
 }
 
+function relTime(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)    return `${s}s ago`;
+  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
 function clockStr(date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-
-/** Derive category tags from a post title */
-function tagsFromTitle(title) {
-  const t = title.toLowerCase();
-  if (t.includes("hotfix"))     return ["Hotfix"];
-  if (t.includes("tuning"))     return ["Tuning", "Classes"];
-  if (t.includes("ptr"))        return ["PTR", "Development"];
-  if (t.includes("weekly"))     return ["Weekly", "News"];
-  if (t.includes("play with"))  return ["Event", "Community"];
-  if (t.includes("recraft"))    return ["Items", "Crafting"];
-  if (t.includes("season"))     return ["Season"];
+function tagsFromTitle(t = "") {
+  const l = t.toLowerCase();
+  if (l.includes("hotfix"))    return ["Hotfix"];
+  if (l.includes("tuning"))    return ["Tuning", "Classes"];
+  if (l.includes("ptr"))       return ["PTR", "Development"];
+  if (l.includes("weekly"))    return ["Weekly", "News"];
+  if (l.includes("play with")) return ["Event", "Community"];
+  if (l.includes("recraft"))   return ["Items", "Crafting"];
+  if (l.includes("season"))    return ["Season"];
   return ["News"];
 }
-
-/** Shape a raw item object (from any proxy) into our article schema */
-function shapeItem(i, { title, link, pubDate, description }) {
+function shapeItem(i, { title = "", link = "", pubDate = "", description = "" }) {
   const parsed  = pubDate ? new Date(pubDate) : new Date();
-  const excerpt = (description ?? "")
+  const excerpt = description
     .replace(/<[^>]+>/g, "")
-    .replace(/&[a-z#0-9]+;/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, " ")
     .replace(/\s+/g, " ")
-    .slice(0, 200)
-    .trim() || undefined;
-
-  // Guarantee a valid URL — if the RSS gave us one, use it; else fall back to BT home
+    .trim()
+    .slice(0, 220) || undefined;
   const safeUrl = (link && link.startsWith("http")) ? link : BT_HOME;
-
   return {
-    id:     `bt-live-${i}`,
-    blue:   true,
-    game:   "WoW",
+    id: `bt-${i}`, blue: true, game: "WoW",
     source: "Blizzard · BlueTracker",
-    time:   relTime(parsed),
-    _ts:    parsed,
-    url:    safeUrl,
-    tags:   tagsFromTitle(title ?? ""),
-    title:  (title ?? "(no title)").trim(),
-    excerpt,
+    time: relTime(parsed), _ts: parsed,
+    url: safeUrl, tags: tagsFromTitle(title), title: title.trim(), excerpt,
   };
 }
 
-/**
- * fetchBlueTracker()
- *
- * Tries four strategies in order, stopping at the first success.
- *
- *  1. rss2json.com   — dedicated RSS-to-JSON API, most reliable, no XML parsing needed
- *  2. corsproxy.io   — raw proxy, we parse XML ourselves
- *  3. allorigins.win — JSON wrapper { contents }, we parse XML ourselves
- *  4. thingproxy.freeboard.io — last resort raw proxy
- *
- * Returns an array of shaped article objects, or null if every strategy fails.
- */
-async function fetchBlueTracker() {
-  const encoded = encodeURIComponent(BT_RSS);
-  const TIMEOUT = 9000;
-
-  // ── Shared XML parser (used by strategies 2-4) ──────────────────────────────
-  function parseXML(text) {
-    const xml   = new DOMParser().parseFromString(text, "text/xml");
+/** Parse RSS 2.0 XML text into shaped article array */
+function parseRSSXml(text) {
+  try {
+    const xml = new DOMParser().parseFromString(text, "text/xml");
+    if (xml.querySelector("parsererror")) return null;
     const items = Array.from(xml.querySelectorAll("item")).slice(0, 30);
-    if (items.length === 0) return null;
+    if (!items.length) return null;
     return items.map((el, i) => {
-      // <link> in RSS 2.0 is a plain text node between the tag — NOT an attribute.
-      // We must walk the siblings of the <link> element to get the text.
+      // RSS 2.0: <link> is a text-node SIBLING, not innerHTML
       const linkEl  = el.querySelector("link");
-      const rawLink = linkEl
-        ? (linkEl.textContent?.trim() || linkEl.nextSibling?.textContent?.trim())
-        : undefined;
+      const rawLink = linkEl?.nextSibling?.nodeValue?.trim()
+                   || linkEl?.textContent?.trim()
+                   || "";
       return shapeItem(i, {
-        title:       el.querySelector("title")?.textContent,
+        title:       el.querySelector("title")?.textContent       ?? "",
         link:        rawLink,
-        pubDate:     el.querySelector("pubDate")?.textContent,
-        description: el.querySelector("description")?.textContent,
+        pubDate:     el.querySelector("pubDate")?.textContent     ?? "",
+        description: el.querySelector("description")?.textContent ?? "",
       });
     });
-  }
+  } catch { return null; }
+}
 
-  // ── Strategy 1: rss2json.com ─────────────────────────────────────────────────
+function readCache() {
   try {
-    const res = await fetch(
-      `https://api.rss2json.com/v1/api.json?rss_url=${encoded}&count=30&order_by=pubDate&order_dir=desc`,
-      { signal: AbortSignal.timeout(TIMEOUT) }
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { items } = JSON.parse(raw);
+    return items.map(a => ({ ...a, _ts: new Date(a._ts) }));
+  } catch { return null; }
+}
+function writeCache(items) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items })); }
+  catch { /* quota/private — ignore */ }
+}
+
+async function fetchBlueTracker() {
+  const enc = encodeURIComponent(BT_RSS);
+
+  // Strategy 1: allorigins /raw
+  try {
+    const res = await withTimeout(fetch(`https://api.allorigins.win/raw?url=${enc}`), 9000);
+    if (res.ok) {
+      const r = parseRSSXml(await res.text());
+      if (r?.length) { writeCache(r); return r; }
+    }
+  } catch { /* next */ }
+
+  // Strategy 2: rss2json
+  try {
+    const res = await withTimeout(
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${enc}&count=30`), 9000
     );
     if (res.ok) {
-      const json = await res.json();
-      if (json.status === "ok" && json.items?.length > 0) {
-        return json.items.map((item, i) => shapeItem(i, {
-          title:       item.title,
-          link:        item.link,
-          pubDate:     item.pubDate,
-          description: item.description ?? item.content,
+      const j = await res.json();
+      if (j.status === "ok" && j.items?.length) {
+        const r = j.items.map((it, i) => shapeItem(i, {
+          title:       it.title       ?? "",
+          link:        it.link        ?? "",
+          pubDate:     it.pubDate     ?? "",
+          description: it.description ?? it.content ?? "",
         }));
+        writeCache(r); return r;
       }
     }
-  } catch { /* fall through */ }
+  } catch { /* next */ }
 
-  // ── Strategy 2: corsproxy.io ─────────────────────────────────────────────────
+  // Strategy 3: corsproxy.io
   try {
-    const res = await fetch(`https://corsproxy.io/?${encoded}`, { signal: AbortSignal.timeout(TIMEOUT) });
+    const res = await withTimeout(fetch(`https://corsproxy.io/?${enc}`), 9000);
     if (res.ok) {
-      const result = parseXML(await res.text());
-      if (result) return result;
+      const r = parseRSSXml(await res.text());
+      if (r?.length) { writeCache(r); return r; }
     }
-  } catch { /* fall through */ }
+  } catch { /* next */ }
 
-  // ── Strategy 3: allorigins.win ───────────────────────────────────────────────
-  try {
-    const res = await fetch(`https://api.allorigins.win/get?url=${encoded}`, { signal: AbortSignal.timeout(TIMEOUT) });
-    if (res.ok) {
-      const json = await res.json();
-      const result = parseXML(json.contents ?? "");
-      if (result) return result;
-    }
-  } catch { /* fall through */ }
+  // Fallback: localStorage cache
+  const cached = readCache();
+  if (cached?.length) return cached;
 
-  // ── Strategy 4: thingproxy (last resort) ─────────────────────────────────────
-  try {
-    const res = await fetch(`https://thingproxy.freeboard.io/fetch/${BT_RSS}`, { signal: AbortSignal.timeout(TIMEOUT) });
-    if (res.ok) {
-      const result = parseXML(await res.text());
-      if (result) return result;
-    }
-  } catch { /* fall through */ }
-
-  return null; // all strategies failed → use mock data
+  return null;
 }
 
-// ─── News Section ─────────────────────────────────────────────────────────────
-
-const TABS = [
-  { id:"all",  label:"ALL NEWS" },
-  { id:"wow",  label:"WOW" },
-  { id:"dota", label:"DOTA 2" },
-  { id:"blue", label:"BLUE POSTS" },
-];
-
-function NewsSection({ tab, setTab }) {
-  // livePosts: null = not yet fetched | [] = fetch failed / empty | [...] = success
-  const [livePosts,   setLivePosts]   = useState(null);
-  const [fetching,    setFetching]    = useState(false);
-  const [fetchError,  setFetchError]  = useState(false);
-  const [lastFetched, setLastFetched] = useState(null); // Date object
-  const [tickAge,     setTickAge]     = useState(0);    // seconds since last fetch
-
-  // ── Core fetch function ──────────────────────────────────────────────────────
-  const doFetch = useCallback(async (showSpinner = true) => {
-    if (showSpinner) setFetching(true);
-    setFetchError(false);
-    const posts = await fetchBlueTracker();
-    if (posts && posts.length > 0) {
-      setLivePosts(posts);
-      setFetchError(false);
-    } else {
-      // Keep whatever we had; just flag the error
-      setFetchError(true);
-    }
-    setLastFetched(new Date());
-    setTickAge(0);
-    setFetching(false);
-  }, []);
-
-  // ── Initial fetch + auto-refresh every 90 min ────────────────────────────────
-  useEffect(() => {
-    doFetch(true);                                       // immediate on mount
-    const iv = setInterval(() => doFetch(false), REFRESH_MS);
-    return () => clearInterval(iv);
-  }, [doFetch]);
-
-  // ── Tick "Xs ago" counter every second ──────────────────────────────────────
-  useEffect(() => {
-    const iv = setInterval(() => setTickAge(a => a + 1), 1000);
-    return () => clearInterval(iv);
-  }, []);
-
-  // ── Age string shown in the header ──────────────────────────────────────────
-  const ageLabel = lastFetched
-    ? relTime(lastFetched).toUpperCase()
-    : "…";
-
-  // ── Next auto-refresh countdown ─────────────────────────────────────────────
-  const nextRefreshSec = lastFetched
-    ? Math.max(0, Math.round((REFRESH_MS / 1000) - tickAge))
-    : null;
-  const nextLabel = nextRefreshSec !== null
-    ? nextRefreshSec > 60
-      ? `next in ${Math.ceil(nextRefreshSec / 60)}m`
-      : `next in ${nextRefreshSec}s`
-    : "";
-
-  // ── Choose data source: live RSS > mock ─────────────────────────────────────
-  // Re-format relative times on every tick so they stay current
-  const bluePosts = (livePosts ?? BLUE_POSTS).map(a =>
-    a._ts ? { ...a, time: relTime(a._ts) } : a
-  );
-  const allArticles = [...bluePosts, ...WOW_ARTICLES, ...DOTA_ARTICLES];
-
-  const articles = allArticles.filter(a => {
-    if (tab === "all")  return true;
-    if (tab === "wow")  return a.game === "WoW";
-    if (tab === "dota") return a.game === "Dota 2";
-    if (tab === "blue") return a.blue;
-    return true;
-  });
-
-  // ── Manual refresh ───────────────────────────────────────────────────────────
-  const handleRefresh = () => doFetch(true);
-
-  return (
-    <section style={{ marginBottom:52 }}>
-
-      {/* ── Section header ── */}
-      <div className="fu" style={{ display:"flex",flexDirection:"column",alignItems:"center",marginBottom:28 }}>
-        <div style={{ display:"flex",alignItems:"center",gap:14,marginBottom:10 }}>
-          <Bell size={30} color="#fff" strokeWidth={1.5} />
-          <span className="stt" style={{ fontSize:34,color:"#fff",letterSpacing:".1em" }}>NEWS</span>
-        </div>
-
-        <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"center" }}>
-          {/* Live dot */}
-          <div className="live-dot" />
-
-          {/* "Last updated X ago" */}
-          <span className="rj" style={{ fontSize:11,color:"var(--muted)",fontWeight:600,letterSpacing:".06em" }}>
-            LIVE FEED · UPDATED {ageLabel}
-          </span>
-
-          {/* Next auto-refresh hint */}
-          {nextLabel && (
-            <span className="rj" style={{ fontSize:10,color:"var(--dim)",fontWeight:600,letterSpacing:".04em" }}>
-              · {nextLabel}
-            </span>
-          )}
-
-          {/* Source badge — green when live data loaded */}
-          {livePosts && !fetchError && (
-            <span style={{ fontSize:9,padding:"2px 8px",borderRadius:6,
-              background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)",
-              color:"#4ade80",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,letterSpacing:".1em" }}>
-              LIVE · BLUETRACKER
-            </span>
-          )}
-
-          {/* Error badge — shows when all proxies failed; clicking opens BT directly */}
-          {fetchError && (
-            <a href="https://www.bluetracker.gg/wow/" target="_blank" rel="noopener noreferrer"
-               title="Click to view BlueTracker directly"
-               style={{ fontSize:9,padding:"2px 10px",borderRadius:6, cursor:"pointer",
-                 background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",
-                 color:"#f87171",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,
-                 letterSpacing:".1em", textDecoration:"none",
-                 display:"flex",alignItems:"center",gap:5 }}>
-              ⚠ PROXY FAILED — CLICK TO VIEW ON BLUETRACKER.GG
-            </a>
-          )}
-
-          {/* Manual refresh button */}
-          <button
-            onClick={handleRefresh}
-            disabled={fetching}
-            style={{ background:"none",border:"none",cursor:fetching?"default":"pointer",
-              color:"var(--dim)",display:"flex",alignItems:"center",gap:4,
-              fontSize:11,fontFamily:"'Rajdhani',sans-serif",fontWeight:600,letterSpacing:".06em",
-              padding:"3px 8px",borderRadius:8,transition:"color .2s,background .2s",
-              opacity:fetching?0.5:1 }}
-            onMouseEnter={e=>{ if(!fetching){ e.currentTarget.style.color="#fff"; e.currentTarget.style.background="rgba(255,255,255,.05)"; }}}
-            onMouseLeave={e=>{ e.currentTarget.style.color="var(--dim)"; e.currentTarget.style.background="none"; }}>
-            <RefreshCw size={11} style={{ animation:fetching?"spin .8s linear infinite":"none" }} />
-            REFRESH
-          </button>
-        </div>
-      </div>
-
-      {/* ── Tab bar ── */}
-      <div className="fu1" style={{ display:"flex",gap:4,background:"#111113",border:"1px solid var(--border)",borderRadius:17,padding:5,marginBottom:16 }}>
-        {TABS.map(t => (
-          <button key={t.id} className={`tab-btn${tab===t.id?" on":""}`}
-            onClick={()=>setTab(t.id)} style={{ flex:1 }}>
-            {t.label}
-            {/* Live count badge on BLUE POSTS tab */}
-            {t.id === "blue" && livePosts && (
-              <span style={{ marginLeft:5,fontSize:9,padding:"1px 6px",borderRadius:5,
-                background:"rgba(34,197,94,.12)",border:"1px solid rgba(34,197,94,.22)",
-                color:"#4ade80",verticalAlign:"middle",fontWeight:700 }}>
-                {livePosts.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Cards ── */}
-      {fetching && livePosts === null ? (
-        // First-load skeleton
-        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          {[1,2,3,4,5,6,7].map(i => (
-            <div key={i} className="skeleton" style={{ height:76, animationDelay:`${i*80}ms` }} />
-          ))}
-        </div>
-      ) : (
-        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-          {articles.map((a,i) => <NewsCard key={a.id} article={a} index={i} />)}
-          {articles.length === 0 && (
-            <div style={{ textAlign:"center",padding:"40px 0",color:"var(--dim)",
-              fontFamily:"'Rajdhani',sans-serif",fontSize:13,letterSpacing:".06em" }}>
-              NO ARTICLES IN THIS CATEGORY
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Footer: last fetch time + source link ── */}
-      {lastFetched && (
-        <div style={{ marginTop:16,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-          <span className="rj" style={{ fontSize:10,color:"var(--dim)",fontWeight:600,letterSpacing:".04em" }}>
-            Last synced {clockStr(lastFetched)} · auto-refreshes every 90 min
-          </span>
-          <a href="https://www.bluetracker.gg/wow/" target="_blank" rel="noopener noreferrer"
-             style={{ fontSize:10,color:"rgba(80,150,255,.45)",fontFamily:"'Rajdhani',sans-serif",
-               fontWeight:600,textDecoration:"none",letterSpacing:".04em",transition:"color .2s" }}
-             onMouseEnter={e=>e.currentTarget.style.color="rgba(125,185,255,.8)"}
-             onMouseLeave={e=>e.currentTarget.style.color="rgba(80,150,255,.45)"}>
-            bluetracker.gg ↗
-          </a>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ─── Community Section ────────────────────────────────────────────────────────
-
-function CommunitySection() {
-  return (
-    <section style={{ marginBottom:52 }}>
-      <div style={{ display:"grid",gridTemplateColumns:"200px 1fr",gap:24,alignItems:"start" }} className="comm-grid">
-        <div className="comm-label fu2">
-          <div className="stt" style={{ fontSize:26,color:"#fff",marginBottom:8 }}>COMMUNITY PORTALS</div>
-          <p style={{ fontSize:12,color:"var(--muted)",lineHeight:1.65 }}>
-            Stay connected with the Ruse's Bakery community. Join our Discord and explore premier news portals.
-          </p>
-          <p style={{ fontSize:12,color:"var(--dim)",lineHeight:1.6,marginTop:8 }}>
-            Share strategies, discuss updates, and celebrate victories together. Get exclusive insights and content.
-          </p>
-        </div>
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }} className="comm-grid-inner">
-          {COMM.map((c,i)=><CommCard key={c.id} card={c} index={i} />)}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Dynamic background config ────────────────────────────────────────────────
+// ─── Dynamic background themes — real game wallpapers ────────────────────────
+//
+//  CSS background-image has NO CORS restriction — any public URL works.
+//  Each theme: image (URL) + solid base bg + dark overlay gradient so text
+//  stays readable over the art + accent gradient for atmospheric glow.
+//
 
 const BG_THEMES = {
   all: {
-    // Neutral dark — subtle star-field feel
+    image:   null,
     bg:      "#0a0a0b",
-    grad:    "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,101,242,0.12) 0%, transparent 70%)",
-    accent:  "rgba(88,101,242,0.06)",
+    overlay: "linear-gradient(180deg, rgba(10,10,11,0.50) 0%, rgba(10,10,11,0.82) 65%, #0a0a0b 100%)",
+    grad:    "radial-gradient(ellipse 80% 45% at 50% 0%, rgba(88,101,242,0.20) 0%, transparent 70%)",
+    color:   "#818cf8",
     label:   null,
   },
   wow: {
-    // World of Warcraft — deep sapphire / arcane gold
+    // Blizzard Akamai CDN — Battle for Azeroth key art (stable for years)
+    image:   "https://bnetcmsus-a.akamaihd.net/cms/gallery/D60OE6PJOOA91568925329129.jpg",
     bg:      "#07090f",
-    grad:    `
-      radial-gradient(ellipse 100% 60% at 50% -5%,  rgba(30,80,200,0.28) 0%, transparent 65%),
-      radial-gradient(ellipse 60%  40% at 85% 20%,  rgba(180,130,20,0.10) 0%, transparent 55%),
-      radial-gradient(ellipse 40%  30% at 10% 40%,  rgba(100,40,200,0.12) 0%, transparent 55%)
-    `,
-    accent:  "rgba(30,80,200,0.08)",
+    overlay: "linear-gradient(180deg, rgba(7,9,15,0.38) 0%, rgba(7,9,15,0.68) 55%, rgba(7,9,15,0.95) 85%, #07090f 100%)",
+    grad:    "radial-gradient(ellipse 80% 40% at 50% 0%, rgba(30,80,200,0.25) 0%, transparent 70%)",
+    color:   "#60a5fa",
     label:   "WORLD OF WARCRAFT",
-    color:   "#3b82f6",
   },
   dota: {
-    // Dota 2 — blood-red ember glow
+    // Valve / Steam CDN — Dota 2 official background (extremely stable)
+    image:   "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/backgrounds/greyfull.jpg",
     bg:      "#0b0707",
-    grad:    `
-      radial-gradient(ellipse 100% 60% at 50% -5%,  rgba(180,30,20,0.30) 0%, transparent 65%),
-      radial-gradient(ellipse 50%  35% at 80% 25%,  rgba(220,80,20,0.12) 0%, transparent 50%),
-      radial-gradient(ellipse 40%  30% at 15% 35%,  rgba(120,20,60,0.12) 0%, transparent 55%)
-    `,
-    accent:  "rgba(180,30,20,0.08)",
+    overlay: "linear-gradient(180deg, rgba(11,7,7,0.35) 0%, rgba(11,7,7,0.65) 55%, rgba(11,7,7,0.95) 85%, #0b0707 100%)",
+    grad:    "radial-gradient(ellipse 80% 40% at 50% 0%, rgba(180,30,20,0.25) 0%, transparent 70%)",
+    color:   "#f87171",
     label:   "DOTA 2",
-    color:   "#ef4444",
   },
   blue: {
-    // Blizzard Blue Posts — icy covenant blue
+    // Blizzard Akamai CDN — WoW Shadowlands / Covenant art
+    image:   "https://bnetcmsus-a.akamaihd.net/cms/gallery/2x/9WCLZ7QOMHKP1591320298347.jpg",
     bg:      "#060c14",
-    grad:    `
-      radial-gradient(ellipse 90%  55% at 50% -8%,  rgba(30,100,255,0.30) 0%, transparent 65%),
-      radial-gradient(ellipse 45%  30% at 80% 20%,  rgba(80,180,255,0.10) 0%, transparent 55%),
-      radial-gradient(ellipse 35%  25% at 12% 45%,  rgba(20,60,200,0.12) 0%, transparent 55%)
-    `,
-    accent:  "rgba(30,100,255,0.08)",
+    overlay: "linear-gradient(180deg, rgba(6,12,20,0.40) 0%, rgba(6,12,20,0.70) 55%, rgba(6,12,20,0.95) 85%, #060c14 100%)",
+    grad:    "radial-gradient(ellipse 80% 40% at 50% 0%, rgba(30,100,255,0.25) 0%, transparent 70%)",
+    color:   "#93c5fd",
     label:   "BLUE POSTS",
-    color:   "#60a5fa",
   },
 };
 
@@ -1058,67 +821,75 @@ export default function App() {
     <>
       <style>{GLOBAL_CSS}</style>
 
-      {/* ── Dynamic game background ── */}
+      {/* ── Layer 0: solid base colour ── */}
       <div style={{
-        position:   "fixed",
-        inset:      0,
-        zIndex:     0,
+        position: "fixed", inset: 0, zIndex: 0,
         background: theme.bg,
-        transition: "background 0.6s ease",
+        transition: "background 0.5s ease",
         pointerEvents: "none",
       }} />
 
-      {/* Gradient overlay — crossfades on tab switch */}
+      {/* ── Layer 1: wallpaper image (crossfades on tab change) ── */}
+      {theme.image && (
+        <div
+          key={tab}           // remount = instant image swap + fade-in
+          style={{
+            position: "fixed", inset: 0, zIndex: 1,
+            backgroundImage:    `url(${theme.image})`,
+            backgroundSize:     "cover",
+            backgroundPosition: "center top",
+            backgroundRepeat:   "no-repeat",
+            opacity:            bgOpacity,
+            transition:         "opacity 0.45s ease",
+            pointerEvents:      "none",
+          }}
+        />
+      )}
+
+      {/* ── Layer 2: dark overlay so text stays readable ── */}
       <div style={{
-        position:   "fixed",
-        inset:      0,
-        zIndex:     1,
+        position: "fixed", inset: 0, zIndex: 2,
+        background: theme.overlay,
+        opacity:    bgOpacity,
+        transition: "opacity 0.45s ease",
+        pointerEvents: "none",
+      }} />
+
+      {/* ── Layer 3: coloured accent gradient ── */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 3,
         background: theme.grad,
         opacity:    bgOpacity,
-        transition: "opacity 0.35s ease, background 0.35s ease",
+        transition: "opacity 0.45s ease",
         pointerEvents: "none",
       }} />
 
-      {/* Subtle vignette */}
+      {/* ── Layer 4: vignette ── */}
       <div style={{
-        position:   "fixed",
-        inset:      0,
-        zIndex:     2,
-        background: "radial-gradient(ellipse 120% 120% at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 100%)",
+        position: "fixed", inset: 0, zIndex: 4,
+        background: "radial-gradient(ellipse 130% 130% at 50% 50%, transparent 35%, rgba(0,0,0,0.60) 100%)",
         pointerEvents: "none",
       }} />
 
-      {/* ── Animated floating orbs ── */}
-      <div style={{ position:"fixed", inset:0, zIndex:2, overflow:"hidden", pointerEvents:"none" }}>
-        {/* Orb 1 */}
+      {/* ── Layer 5: floating colour orbs ── */}
+      <div style={{ position:"fixed", inset:0, zIndex:5, overflow:"hidden", pointerEvents:"none" }}>
         <div style={{
-          position: "absolute",
-          width: 400, height: 400,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${theme.color ?? "#5865f2"}14 0%, transparent 70%)`,
-          top: "-10%", left: "60%",
-          animation: "float1 18s ease-in-out infinite",
-          transition: "background 0.6s ease",
+          position:"absolute", width:420, height:420, borderRadius:"50%",
+          background:`radial-gradient(circle, ${theme.color ?? "#5865f2"}12 0%, transparent 70%)`,
+          top:"-10%", left:"58%",
+          animation:"float1 18s ease-in-out infinite", transition:"background 0.5s ease",
         }} />
-        {/* Orb 2 */}
         <div style={{
-          position: "absolute",
-          width: 300, height: 300,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${theme.color ?? "#a78bfa"}10 0%, transparent 70%)`,
-          top: "30%", left: "-5%",
-          animation: "float2 22s ease-in-out infinite",
-          transition: "background 0.6s ease",
+          position:"absolute", width:320, height:320, borderRadius:"50%",
+          background:`radial-gradient(circle, ${theme.color ?? "#a78bfa"}0e 0%, transparent 70%)`,
+          top:"30%", left:"-5%",
+          animation:"float2 22s ease-in-out infinite", transition:"background 0.5s ease",
         }} />
-        {/* Orb 3 */}
         <div style={{
-          position: "absolute",
-          width: 250, height: 250,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${theme.color ?? "#3b82f6"}0d 0%, transparent 70%)`,
-          bottom: "10%", right: "5%",
-          animation: "float3 26s ease-in-out infinite",
-          transition: "background 0.6s ease",
+          position:"absolute", width:260, height:260, borderRadius:"50%",
+          background:`radial-gradient(circle, ${theme.color ?? "#3b82f6"}0b 0%, transparent 70%)`,
+          bottom:"8%", right:"4%",
+          animation:"float3 26s ease-in-out infinite", transition:"background 0.5s ease",
         }} />
       </div>
 
@@ -1129,13 +900,13 @@ export default function App() {
           top:        "50%",
           left:       "50%",
           transform:  "translate(-50%, -50%)",
-          zIndex:     2,
+          zIndex:     6,
           fontFamily: "'Bebas Neue', sans-serif",
           fontSize:   "clamp(80px, 18vw, 200px)",
           letterSpacing: "0.12em",
           color:      "transparent",
           WebkitTextStroke: `1px ${theme.color ?? "#fff"}`,
-          opacity:    0.028,
+          opacity:    0.03,
           whiteSpace: "nowrap",
           userSelect: "none",
           pointerEvents: "none",
@@ -1145,7 +916,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── All page content above backgrounds ── */}
+      {/* ── All page content ── */}
       <div style={{ position: "relative", zIndex: 10 }}>
         <Header scrolled={scrolled} />
         <main style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px 60px" }}>
