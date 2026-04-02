@@ -140,41 +140,44 @@ const GLOBAL_CSS = `
 //
 // BLUE_POSTS are the static fallback shown while the live RSS is loading,
 // or if all three proxy fetches fail.
-// url → always the real BlueTracker listing; live RSS replaces these with
-//        the exact per-thread permalinks once it loads successfully.
+// BT_HOME is declared once, further down in the RSS fetch section.
 //
 
-const BT_HOME = "https://www.bluetracker.gg/wow/";
+// ─── Constants (used by both mock data and fetch logic) ────────────────────
+const BT_RSS     = "https://www.bluetracker.gg/wow/feed/";
+const BT_HOME    = "https://www.bluetracker.gg/wow/";
+const CACHE_KEY  = "bt_cache";
+const REFRESH_MS = 90 * 60 * 1000;
 
 const BLUE_POSTS = [
   { id:"bp1", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Tuning","Classes"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"Class Tuning Incoming – March 31",
     excerpt:"We will be applying the following tuning changes with scheduled maintenance on Monday, March 31." },
   { id:"bp2", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Items","Crafting"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"Recraft Myth Crests Are Gone",
     excerpt:"Recrafted items can no longer consume Myth Crests due to an unintended interaction discovered after the latest patch." },
   { id:"bp3", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Event","Community"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27" },
   { id:"bp4", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Weekly","News"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"WoW Weekly: Midnight Season 1, \"A Place to Call Home\", Twitch Drop, and More!" },
   { id:"bp5", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Hotfix"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"World of Warcraft: Midnight Hotfixes – March 26" },
   { id:"bp6", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Hotfix"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"World of Warcraft: Midnight Hotfixes – March 25" },
   { id:"bp7", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Event","Community"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"Play with the Blues: Abyss Anglers – Friday, March 27" },
   { id:"bp8", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["PTR","Development"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"12.0.5 PTR Development Notes" },
   { id:"bp9", blue:true, game:"WoW", source:"Blizzard · BlueTracker", time:"loading...", tags:["Event"],
-    url: BT_HOME,
+    url: "https://www.bluetracker.gg/wow/",
     title:"Play with the Blues: Void Assaults Stress Test – Friday, March 27" },
 ];
 
@@ -610,10 +613,6 @@ function Header({ scrolled }) {
 //  localStorage "bt_cache" gives offline/proxy-failure resilience across reloads.
 //
 
-const BT_RSS     = "https://www.bluetracker.gg/wow/feed/";
-const BT_HOME    = "https://www.bluetracker.gg/wow/";
-const CACHE_KEY  = "bt_cache";
-const REFRESH_MS = 90 * 60 * 1000;
 
 /** Works in every browser — no AbortSignal.timeout() needed */
 function withTimeout(promise, ms) {
