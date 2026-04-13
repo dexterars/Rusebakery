@@ -29,8 +29,8 @@ const GLOBAL_CSS = `
   .rj{font-family:'Rajdhani',sans-serif}
   .blue-badge{font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:2px 8px;border-radius:6px;background:rgba(50,130,255,.16);border:1px solid rgba(80,150,255,.32);color:#7eb8ff;flex-shrink:0}
   .tag-pill{font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:6px;flex-shrink:0}
-  @media(max-width:720px){.meta-grid{grid-template-columns:1fr !important}.comm-grid{grid-template-columns:1fr 1fr !important}.role-grid{grid-template-columns:repeat(3,1fr) !important}.meta-label,.comm-label{display:none !important}}
-  @media(max-width:480px){.comm-grid{grid-template-columns:1fr !important}.role-grid{grid-template-columns:1fr !important}.tab-btn{padding:9px 10px;font-size:11px}}
+  @media(max-width:720px){.meta-grid{grid-template-columns:1fr !important}.comm-grid{grid-template-columns:1fr 1fr !important}.role-grid{grid-template-columns:repeat(3,1fr) !important}.dota-pos-grid{grid-template-columns:repeat(3,1fr) !important}.meta-label,.comm-label{display:none !important}}
+  @media(max-width:480px){.comm-grid{grid-template-columns:1fr !important}.role-grid{grid-template-columns:1fr !important}.dota-pos-grid{grid-template-columns:repeat(2,1fr) !important}.tab-btn{padding:9px 10px;font-size:11px}}
 `;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -290,13 +290,129 @@ function RoleCapsule({role}){
 }
 function MetaRankings(){
   return(
-    <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:20,alignItems:"center",marginBottom:36}} className="meta-grid fu2">
+    <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:20,alignItems:"center",marginBottom:28}} className="meta-grid fu2">
       <div className="meta-label">
         <div className="stt" style={{fontSize:26,color:"#fff",marginBottom:8}}>META RANKINGS</div>
         <p style={{fontSize:12,color:"var(--muted)",lineHeight:1.65}}>Explore the meta and discover how each role ranks. Powered by <span style={{color:"rgba(255,255,255,.4)"}}>murlok.io</span>.</p>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}} className="role-grid">
         {ROLES.map(r=><RoleCapsule key={r.label} role={r}/>)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dota 2 Meta ──────────────────────────────────────────────────────────────
+
+const DOTA_POSITIONS = [
+  { pos:1, label:"CARRY",        col:"#f59e0b", glow:"rgba(245,158,11,.30)", border:"rgba(245,158,11,.55)" },
+  { pos:2, label:"MID",          col:"#a855f7", glow:"rgba(168,85,247,.28)", border:"rgba(168,85,247,.55)" },
+  { pos:3, label:"OFFLANE",      col:"#ef4444", glow:"rgba(239,68,68,.28)",  border:"rgba(239,68,68,.55)"  },
+  { pos:4, label:"SUPPORT",      col:"#22c55e", glow:"rgba(34,197,94,.28)",  border:"rgba(34,197,94,.55)"  },
+  { pos:5, label:"HARD SUPPORT", col:"#3b82f6", glow:"rgba(59,130,246,.28)", border:"rgba(59,130,246,.55)" },
+];
+
+function DotaPositionCapsule({ pos }) {
+  const [hv, setHv] = useState(false);
+  return (
+    <a href="https://dota2protracker.com/meta" target="_blank" rel="noopener noreferrer"
+       style={{ textDecoration:"none", display:"block" }}
+       onMouseEnter={()=>setHv(true)} onMouseLeave={()=>setHv(false)}>
+      <div style={{
+        display:"flex", alignItems:"center", gap:10,
+        padding:"10px 16px 10px 10px", borderRadius:50,
+        border:`1px solid ${hv ? pos.border : pos.col+"30"}`,
+        background: hv ? "rgba(0,0,0,.82)" : "rgba(0,0,0,.70)",
+        backdropFilter:"blur(10px)",
+        boxShadow: hv
+          ? `0 0 0 1px ${pos.border}, 0 8px 28px ${pos.glow}`
+          : `0 0 0 1px ${pos.col}18`,
+        cursor:"pointer",
+        transform: hv ? "scale(1.05)" : "scale(1)",
+        transition:"transform .22s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease",
+        userSelect:"none",
+      }}>
+        {/* Position number badge */}
+        <div style={{
+          width:42, height:42, borderRadius:50, flexShrink:0,
+          background:`${pos.col}20`,
+          border:`2px solid ${hv ? pos.col : pos.col+"55"}`,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          boxShadow: hv ? `0 0 12px ${pos.glow}` : "none",
+          transition:"border-color .22s, box-shadow .22s",
+        }}>
+          <span className="stt" style={{
+            fontSize:20, lineHeight:1,
+            color: hv ? pos.col : pos.col+"cc",
+            transition:"color .22s",
+          }}>
+            {pos.pos}
+          </span>
+        </div>
+
+        {/* Label */}
+        <span className="stt" style={{
+          fontSize:pos.label.length > 7 ? 13 : 17,
+          letterSpacing:".07em",
+          color: hv ? "#fff" : "rgba(255,255,255,.82)",
+          transition:"color .2s", lineHeight:1,
+        }}>
+          {pos.label}
+        </span>
+
+        {/* Arrow */}
+        <span style={{
+          marginLeft:"auto", fontSize:14, color:pos.col,
+          opacity: hv ? 1 : 0,
+          transform: hv ? "translateX(0)" : "translateX(-4px)",
+          transition:"opacity .2s, transform .2s",
+        }}>→</span>
+      </div>
+    </a>
+  );
+}
+
+function DotaMeta() {
+  return (
+    <div style={{
+      display:"grid", gridTemplateColumns:"200px 1fr",
+      gap:20, alignItems:"center", marginBottom:36,
+    }} className="meta-grid fu2">
+
+      {/* Left description */}
+      <div className="meta-label">
+        {/* Dota 2 "D" logo */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+          <div style={{
+            width:32, height:32, borderRadius:8,
+            background:"rgba(194,60,42,.2)", border:"1px solid rgba(194,60,42,.35)",
+            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+          }}>
+            <svg width={18} height={18} viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="46" fill="rgba(194,60,42,.15)" stroke="rgba(194,60,42,.5)" strokeWidth="3"/>
+              <text x="50" y="67" textAnchor="middle" fontSize="52" fontWeight="900" fill="#ef4444" fontFamily="serif">D</text>
+            </svg>
+          </div>
+          <div className="stt" style={{ fontSize:26, color:"#ef4444", lineHeight:1 }}>DOTA 2 META</div>
+        </div>
+        <p style={{ fontSize:12, color:"var(--muted)", lineHeight:1.65 }}>
+          Patch 7.41b hero meta by position. Win rates, pick rates & top builds from high-MMR matches.
+        </p>
+        <a href="https://dota2protracker.com/meta" target="_blank" rel="noopener noreferrer"
+           style={{ display:"inline-block", marginTop:8, fontSize:10,
+             color:"rgba(239,68,68,.55)", fontFamily:"'Rajdhani',sans-serif",
+             fontWeight:600, letterSpacing:".06em", textDecoration:"none",
+             transition:"color .2s" }}
+           onMouseEnter={e=>e.currentTarget.style.color="rgba(239,68,68,.9)"}
+           onMouseLeave={e=>e.currentTarget.style.color="rgba(239,68,68,.55)"}>
+          dota2protracker.com ↗
+        </a>
+      </div>
+
+      {/* 5 position capsules */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}
+           className="dota-pos-grid">
+        {DOTA_POSITIONS.map(p => <DotaPositionCapsule key={p.pos} pos={p} />)}
       </div>
     </div>
   );
@@ -1202,6 +1318,7 @@ export default function App(){
         <main style={{ maxWidth:900, margin:"0 auto", padding:"32px 20px 60px" }}>
           <NewsSection tab={tab} setTab={handleTabChange}/>
           <MetaRankings/>
+          <DotaMeta/>
           <GuidesSection/>
           <CommunitySection/>
         </main>
