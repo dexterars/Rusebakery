@@ -521,6 +521,209 @@ function CommunitySection(){
   );
 }
 
+// ─── Guides Section ──────────────────────────────────────────────────────────
+// Full murlok.io class/spec grid — every WoW class with spec pills + mode switcher
+
+const ICON = "https://render.worldofwarcraft.com/us/icons/56/";
+const ART  = "https://static.murlok.io/web/art/og/";
+
+const CLASSES = [
+  { name:"Death Knight",  slug:"death-knight",   color:"#C41E3A", icon:"spell_deathknight_classicon.jpg",
+    specs:[{n:"Blood",      s:"blood",        i:"spell_deathknight_bloodpresence.jpg"},
+           {n:"Frost",      s:"frost",        i:"spell_deathknight_frostpresence.jpg"},
+           {n:"Unholy",     s:"unholy",       i:"spell_deathknight_unholypresence.jpg"}] },
+  { name:"Demon Hunter",  slug:"demon-hunter",   color:"#A330C9", icon:"classicon_demonhunter.jpg",
+    specs:[{n:"Havoc",      s:"havoc",        i:"ability_demonhunter_specdps.jpg"},
+           {n:"Vengeance",  s:"vengeance",    i:"ability_demonhunter_spectank.jpg"},
+           {n:"Devourer",   s:"devourer",     i:"classicon_demonhunter_void_64.jpg"}] },
+  { name:"Druid",         slug:"druid",          color:"#FF7C0A", icon:"classicon_druid.jpg",
+    specs:[{n:"Balance",    s:"balance",      i:"spell_nature_starfall.jpg"},
+           {n:"Feral",      s:"feral",        i:"ability_druid_catform.jpg"},
+           {n:"Guardian",   s:"guardian",     i:"ability_racial_bearform.jpg"},
+           {n:"Restoration",s:"restoration",  i:"spell_nature_healingtouch.jpg"}] },
+  { name:"Evoker",        slug:"evoker",          color:"#33937F", icon:"classicon_evoker.jpg",
+    specs:[{n:"Devastation",s:"devastation",  i:"classicon_evoker_devastation.jpg"},
+           {n:"Preservation",s:"preservation",i:"classicon_evoker_preservation.jpg"},
+           {n:"Augmentation",s:"augmentation",i:"classicon_evoker_augmentation.jpg"}] },
+  { name:"Hunter",        slug:"hunter",          color:"#AAD372", icon:"classicon_hunter.jpg",
+    specs:[{n:"Beast Mastery",s:"beast-mastery",i:"ability_hunter_bestialdiscipline.jpg"},
+           {n:"Marksmanship",s:"marksmanship",   i:"ability_hunter_focusedaim.jpg"},
+           {n:"Survival",    s:"survival",       i:"ability_hunter_camouflage.jpg"}] },
+  { name:"Mage",          slug:"mage",            color:"#3FC7EB", icon:"classicon_mage.jpg",
+    specs:[{n:"Arcane",     s:"arcane",       i:"spell_holy_magicalsentry.jpg"},
+           {n:"Fire",       s:"fire",         i:"spell_fire_firebolt02.jpg"},
+           {n:"Frost",      s:"frost",        i:"spell_frost_frostbolt02.jpg"}] },
+  { name:"Monk",          slug:"monk",            color:"#00FF98", icon:"classicon_monk.jpg",
+    specs:[{n:"Brewmaster", s:"brewmaster",   i:"spell_monk_brewmaster_spec.jpg"},
+           {n:"Windwalker", s:"windwalker",   i:"spell_monk_windwalker_spec.jpg"},
+           {n:"Mistweaver", s:"mistweaver",   i:"spell_monk_mistweaver_spec.jpg"}] },
+  { name:"Paladin",       slug:"paladin",         color:"#F48CBA", icon:"classicon_paladin.jpg",
+    specs:[{n:"Holy",       s:"holy",         i:"spell_holy_holybolt.jpg"},
+           {n:"Protection", s:"protection",   i:"ability_paladin_shieldofthetemplar.jpg"},
+           {n:"Retribution",s:"retribution",  i:"spell_holy_auraoflight.jpg"}] },
+  { name:"Priest",        slug:"priest",          color:"#E8E8E8", icon:"classicon_priest.jpg",
+    specs:[{n:"Discipline", s:"discipline",   i:"spell_holy_powerwordshield.jpg"},
+           {n:"Holy",       s:"holy",         i:"spell_holy_guardianspirit.jpg"},
+           {n:"Shadow",     s:"shadow",       i:"spell_shadow_shadowwordpain.jpg"}] },
+  { name:"Rogue",         slug:"rogue",           color:"#FFF468", icon:"classicon_rogue.jpg",
+    specs:[{n:"Assassination",s:"assassination",i:"ability_rogue_eviscerate.jpg"},
+           {n:"Outlaw",     s:"outlaw",       i:"ability_rogue_waylay.jpg"},
+           {n:"Subtlety",   s:"subtlety",     i:"ability_stealth.jpg"}] },
+  { name:"Shaman",        slug:"shaman",          color:"#0070DD", icon:"classicon_shaman.jpg",
+    specs:[{n:"Elemental",  s:"elemental",    i:"spell_nature_lightning.jpg"},
+           {n:"Enhancement",s:"enhancement",  i:"spell_shaman_improvedstormstrike.jpg"},
+           {n:"Restoration",s:"restoration",  i:"spell_nature_magicimmunity.jpg"}] },
+  { name:"Warlock",       slug:"warlock",         color:"#8788EE", icon:"classicon_warlock.jpg",
+    specs:[{n:"Affliction", s:"affliction",   i:"spell_shadow_deathcoil.jpg"},
+           {n:"Demonology", s:"demonology",   i:"spell_shadow_metamorphosis.jpg"},
+           {n:"Destruction",s:"destruction",  i:"spell_shadow_rainoffire.jpg"}] },
+  { name:"Warrior",       slug:"warrior",         color:"#C69B3A", icon:"classicon_warrior.jpg",
+    specs:[{n:"Arms",       s:"arms",         i:"ability_warrior_savageblow.jpg"},
+           {n:"Fury",       s:"fury",         i:"ability_warrior_innerrage.jpg"},
+           {n:"Protection", s:"protection",   i:"ability_warrior_defensivestance.jpg"}] },
+];
+
+const GUIDE_MODES = [
+  { id:"m+",           label:"M+" },
+  { id:"3v3",          label:"3v3 Arena" },
+  { id:"2v2",          label:"2v2 Arena" },
+  { id:"solo-shuffle", label:"Solo Shuffle" },
+];
+
+function SpecPill({ cls, spec, mode }) {
+  const [hv, setHv] = useState(false);
+  const url = `https://murlok.io/${cls.slug}/${spec.s}/${mode}`;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       style={{ textDecoration:"none", display:"inline-flex", alignItems:"center", gap:6,
+         padding:"5px 10px 5px 6px", borderRadius:30,
+         border:`1px solid ${hv ? cls.color+"80" : "rgba(255,255,255,.07)"}`,
+         background: hv ? cls.color+"18" : "rgba(255,255,255,.03)",
+         transition:"all .18s ease", cursor:"pointer",
+         boxShadow: hv ? `0 0 10px ${cls.color}22` : "none" }}
+       onMouseEnter={()=>setHv(true)} onMouseLeave={()=>setHv(false)}>
+      <img src={ICON+spec.i} alt={spec.n} width={20} height={20}
+           style={{ borderRadius:4, display:"block", flexShrink:0 }} />
+      <span style={{ fontSize:11, fontFamily:"'Rajdhani',sans-serif", fontWeight:700,
+        letterSpacing:".06em", color: hv ? cls.color : "rgba(255,255,255,.65)",
+        transition:"color .18s", whiteSpace:"nowrap" }}>
+        {spec.n}
+      </span>
+    </a>
+  );
+}
+
+function ClassRow({ cls, mode, index }) {
+  const [hv, setHv] = useState(false);
+  return (
+    <div
+      style={{ position:"relative", overflow:"hidden", borderRadius:18,
+        border:`1px solid ${hv ? cls.color+"40" : "rgba(255,255,255,.05)"}`,
+        background: hv ? `rgba(255,255,255,.03)` : "#111113",
+        padding:"14px 16px", transition:"all .22s ease",
+        boxShadow: hv ? `0 4px 24px ${cls.color}18` : "none",
+        animation:`fadeUp .4s ${index*35}ms ease both`, opacity:0 }}
+      onMouseEnter={()=>setHv(true)} onMouseLeave={()=>setHv(false)}>
+
+      {/* Class art background */}
+      <div style={{ position:"absolute", right:0, top:0, bottom:0, width:160,
+        backgroundImage:`url(${ART+cls.slug}.webp)`,
+        backgroundSize:"cover", backgroundPosition:"center",
+        opacity: hv ? 0.12 : 0.05,
+        transition:"opacity .3s ease",
+        maskImage:"linear-gradient(to left, rgba(0,0,0,.8) 0%, transparent 100%)",
+        WebkitMaskImage:"linear-gradient(to left, rgba(0,0,0,.8) 0%, transparent 100%)",
+        pointerEvents:"none" }} />
+
+      <div style={{ position:"relative", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+        {/* Class icon + name */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, minWidth:160 }}>
+          <img src={ICON+cls.icon} alt={cls.name} width={32} height={32}
+               style={{ borderRadius:8, border:`1px solid ${cls.color}40`, flexShrink:0 }} />
+          <span style={{ fontFamily:"'Rajdhani',sans-serif", fontWeight:800, fontSize:14,
+            letterSpacing:".08em", textTransform:"uppercase",
+            color: hv ? cls.color : "rgba(255,255,255,.75)",
+            transition:"color .2s" }}>
+            {cls.name}
+          </span>
+        </div>
+
+        {/* Spec pills */}
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6, flex:1 }}>
+          {cls.specs.map(spec => (
+            <SpecPill key={spec.s} cls={cls} spec={spec} mode={mode} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GuidesSection() {
+  const [mode, setMode] = useState("m+");
+  return (
+    <section id="guides" style={{ marginBottom:52 }}>
+      {/* Header */}
+      <div className="fu2" style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+        flexWrap:"wrap", gap:12, marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ width:38, height:38, borderRadius:12,
+            background:"linear-gradient(135deg,rgba(255,128,0,.2),rgba(139,92,246,.2))",
+            border:"1px solid rgba(255,255,255,.08)",
+            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <img src={ICON+"inv_misc_book_11.jpg"} alt="" width={22} height={22}
+                 style={{ borderRadius:4 }} />
+          </div>
+          <div>
+            <div className="stt" style={{ fontSize:26, color:"#fff", lineHeight:1 }}>CLASS GUIDES</div>
+            <div className="rj" style={{ fontSize:10, color:"var(--dim)", letterSpacing:".08em", fontWeight:600 }}>
+              POWERED BY MURLOK.IO · MIDNIGHT SEASON 1
+            </div>
+          </div>
+        </div>
+
+        {/* Mode switcher */}
+        <div style={{ display:"flex", gap:4, background:"#111113",
+          border:"1px solid var(--border)", borderRadius:14, padding:4 }}>
+          {GUIDE_MODES.map(m => (
+            <button key={m.id}
+              onClick={() => setMode(m.id)}
+              style={{ padding:"6px 14px", borderRadius:10, border:"none", cursor:"pointer",
+                fontFamily:"'Rajdhani',sans-serif", fontWeight:700, fontSize:11,
+                letterSpacing:".07em", textTransform:"uppercase", transition:"all .18s",
+                background: mode===m.id ? "rgba(255,255,255,.09)" : "transparent",
+                color: mode===m.id ? "#fff" : "var(--muted)" }}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Class list */}
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {CLASSES.map((cls, i) => (
+          <ClassRow key={cls.slug} cls={cls} mode={mode} index={i} />
+        ))}
+      </div>
+
+      {/* Footer link */}
+      <div style={{ marginTop:16, textAlign:"center" }}>
+        <a href="https://murlok.io" target="_blank" rel="noopener noreferrer"
+           style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"10px 22px",
+             borderRadius:14, border:"1px solid rgba(255,255,255,.08)",
+             background:"rgba(255,255,255,.03)", color:"rgba(255,255,255,.35)",
+             fontSize:11, fontFamily:"'Rajdhani',sans-serif", fontWeight:700,
+             letterSpacing:".08em", textTransform:"uppercase", textDecoration:"none",
+             transition:"all .2s" }}
+           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.06)";e.currentTarget.style.color="rgba(255,255,255,.7)"}}
+           onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.03)";e.currentTarget.style.color="rgba(255,255,255,.35)"}}>
+          <ExternalLink size={12}/> View All Builds on Murlok.io
+        </a>
+      </div>
+    </section>
+  );
+}
+
 // ─── Background themes ────────────────────────────────────────────────────────
 const BG_THEMES={
   all: {image:null,bg:"#0a0a0b",overlay:"linear-gradient(180deg,rgba(10,10,11,.50)0%,rgba(10,10,11,.82)65%,#0a0a0b 100%)",grad:"radial-gradient(ellipse 80% 45% at 50% 0%,rgba(88,101,242,.20)0%,transparent 70%)",color:"#818cf8",label:null},
@@ -582,6 +785,7 @@ export default function App(){
         <main style={{maxWidth:900,margin:"0 auto",padding:"32px 20px 60px"}}>
           <NewsSection tab={tab} setTab={handleTabChange}/>
           <MetaRankings/>
+          <GuidesSection/>
           <CommunitySection/>
         </main>
         <footer style={{borderTop:"1px solid var(--border)",padding:"24px 20px",textAlign:"center"}}>
