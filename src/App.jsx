@@ -677,7 +677,7 @@ function GuidesSection() {
           <div>
             <div className="stt" style={{ fontSize:26, color:"#fff", lineHeight:1 }}>CLASS GUIDES</div>
             <div className="rj" style={{ fontSize:10, color:"var(--dim)", letterSpacing:".08em", fontWeight:600 }}>
-              POWERED BY MURLOK.IO · MIDNIGHT SEASON 1
+               MIDNIGHT SEASON 1
             </div>
           </div>
         </div>
