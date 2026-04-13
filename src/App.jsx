@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Bell, ExternalLink, RefreshCw, ChevronRight, Rss } from "lucide-react";
 
 // ─── Global CSS ───────────────────────────────────────────────────────────────
@@ -677,7 +677,7 @@ function GuidesSection() {
           <div>
             <div className="stt" style={{ fontSize:26, color:"#fff", lineHeight:1 }}>CLASS GUIDES</div>
             <div className="rj" style={{ fontSize:10, color:"var(--dim)", letterSpacing:".08em", fontWeight:600 }}>
-               MIDNIGHT SEASON 1
+              POWERED BY MURLOK.IO · MIDNIGHT SEASON 1
             </div>
           </div>
         </div>
@@ -726,17 +726,319 @@ function GuidesSection() {
 
 // ─── Background themes ────────────────────────────────────────────────────────
 const BG_THEMES={
-  all: {image:null,bg:"#0a0a0b",overlay:"linear-gradient(180deg,rgba(10,10,11,.50)0%,rgba(10,10,11,.82)65%,#0a0a0b 100%)",grad:"radial-gradient(ellipse 80% 45% at 50% 0%,rgba(88,101,242,.20)0%,transparent 70%)",color:"#818cf8",label:null},
-  wow: {image:"https://bnetcmsus-a.akamaihd.net/cms/gallery/D60OE6PJOOA91568925329129.jpg",bg:"#07090f",overlay:"linear-gradient(180deg,rgba(7,9,15,.38)0%,rgba(7,9,15,.68)55%,rgba(7,9,15,.95)85%,#07090f 100%)",grad:"radial-gradient(ellipse 80% 40% at 50% 0%,rgba(30,80,200,.25)0%,transparent 70%)",color:"#60a5fa",label:"WORLD OF WARCRAFT"},
-  dota:{image:"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/backgrounds/greyfull.jpg",bg:"#0b0707",overlay:"linear-gradient(180deg,rgba(11,7,7,.35)0%,rgba(11,7,7,.65)55%,rgba(11,7,7,.95)85%,#0b0707 100%)",grad:"radial-gradient(ellipse 80% 40% at 50% 0%,rgba(180,30,20,.25)0%,transparent 70%)",color:"#f87171",label:"DOTA 2"},
-  blue:{image:"https://bnetcmsus-a.akamaihd.net/cms/gallery/2x/9WCLZ7QOMHKP1591320298347.jpg",bg:"#060c14",overlay:"linear-gradient(180deg,rgba(6,12,20,.40)0%,rgba(6,12,20,.70)55%,rgba(6,12,20,.95)85%,#060c14 100%)",grad:"radial-gradient(ellipse 80% 40% at 50% 0%,rgba(30,100,255,.25)0%,transparent 70%)",color:"#93c5fd",label:"BLUE POSTS"},
+  all: {
+    bg:"#0a0a0b",
+    image:null,
+    overlay:"linear-gradient(180deg,rgba(10,10,11,.45)0%,rgba(10,10,11,.75)60%,#0a0a0b 100%)",
+    color:"#818cf8",
+    label:null,
+    // Particle palette: arcane purple/indigo
+    particles:["#8866ff","#aa44cc","#6644aa","#5544dd","#9966ff","#cc44ff"],
+    mist:["#6644aa","#4422aa","#8844cc"],
+  },
+  wow: {
+    bg:"#07090f",
+    image:"https://bnetcmsus-a.akamaihd.net/cms/gallery/D60OE6PJOOA91568925329129.jpg",
+    overlay:"linear-gradient(180deg,rgba(7,9,15,.38)0%,rgba(7,9,15,.68)55%,rgba(7,9,15,.95)85%,#07090f 100%)",
+    color:"#60a5fa",
+    label:"WORLD OF WARCRAFT",
+    // Particle palette: arcane blue + gold
+    particles:["#4488ff","#2266dd","#88aaff","#ffcc44","#ffaa22","#aa88ff","#66bbff"],
+    mist:["#1133aa","#2244cc","#334499"],
+  },
+  dota:{
+    bg:"#0b0707",
+    image:"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/backgrounds/greyfull.jpg",
+    overlay:"linear-gradient(180deg,rgba(11,7,7,.30)0%,rgba(11,7,7,.62)55%,rgba(11,7,7,.96)85%,#0b0707 100%)",
+    color:"#f87171",
+    label:"DOTA 2",
+    // Particle palette: embers — orange/red/gold (like dota2.com/home)
+    particles:["#ff4400","#ff6600","#ff8800","#ffaa00","#dd2200","#ff3300","#ff5500","#cc1100"],
+    mist:["#6b0a0a","#8b1a0a","#4a0505"],
+  },
+  blue:{
+    bg:"#060c14",
+    image:"https://bnetcmsus-a.akamaihd.net/cms/gallery/2x/9WCLZ7QOMHKP1591320298347.jpg",
+    overlay:"linear-gradient(180deg,rgba(6,12,20,.40)0%,rgba(6,12,20,.70)55%,rgba(6,12,20,.95)85%,#060c14 100%)",
+    color:"#93c5fd",
+    label:"BLUE POSTS",
+    // Particle palette: icy blue
+    particles:["#0066ff","#2288ff","#88aaff","#4499ff","#0044cc","#66ccff","#aaddff"],
+    mist:["#002266","#003388","#001144"],
+  },
 };
+
+// ─── Animated Background (Canvas particle system) ─────────────────────────────
+//
+//  Inspired by dota2.com/home — dark atmosphere with glowing embers/sparks,
+//  slow-drifting mist blobs, and subtle volumetric light rays.
+//  Colors swap when the tab changes (dota = fire embers, wow = arcane sparks…)
+//
+function AnimatedBackground({ theme, tab, bgOpacity }) {
+  const canvasRef = useRef(null);
+  const rafRef    = useRef(null);
+  const stateRef  = useRef(null); // holds live mutable state so effect doesn't re-run
+
+  // Resize canvas to fill screen
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const resize = () => {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      // Rebuild particles on resize
+      if (stateRef.current) stateRef.current.needsRebuild = true;
+    };
+    resize();
+    window.addEventListener("resize", resize, { passive: true });
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+
+  // Main animation loop — restarts when tab changes to pick up new colors
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    cancelAnimationFrame(rafRef.current);
+
+    const ctx = canvas.getContext("2d");
+    const W   = () => canvas.width;
+    const H   = () => canvas.height;
+
+    const colors = theme.particles;
+    const mists  = theme.mist;
+    const rnd    = (a, b) => a + Math.random() * (b - a);
+    const pick   = arr => arr[Math.floor(Math.random() * arr.length)];
+    const hex2rgb = h => {
+      const r = parseInt(h.slice(1,3),16);
+      const g = parseInt(h.slice(3,5),16);
+      const b = parseInt(h.slice(5,7),16);
+      return [r,g,b];
+    };
+
+    // ── Particle ──────────────────────────────────────────────────────────────
+    class Particle {
+      constructor(scatter) {
+        this.scatter = scatter;
+        this.reset();
+        if (scatter) this.y = rnd(0, H()); // spread initial particles
+      }
+      reset() {
+        this.x    = rnd(0, W());
+        this.y    = H() + rnd(0, 80);          // spawn below screen
+        this.vx   = rnd(-0.35, 0.35);
+        this.vy   = -rnd(0.15, 0.7);            // float upward
+        this.r    = rnd(0.4, 2.2);
+        this.a    = 0;
+        this.maxA = rnd(0.15, 0.65);
+        this.age  = 0;
+        this.life = rnd(160, 420);
+        this.col  = pick(colors);
+        this.wx   = rnd(0, Math.PI * 2);        // wobble phase
+        this.ws   = rnd(-0.025, 0.025);         // wobble speed
+        // Type: 0 = ember (small+sharp), 1 = orb (large+soft)
+        this.type = Math.random() < 0.15 ? 1 : 0;
+        if (this.type === 1) { this.r = rnd(3, 8); this.maxA *= 0.4; }
+      }
+      step() {
+        this.age++;
+        this.wx += this.ws;
+        this.x  += this.vx + Math.sin(this.wx) * 0.25;
+        this.y  += this.vy;
+        // Fade in quickly, then fade out over life
+        const t = this.age / this.life;
+        this.a  = this.maxA * Math.min(1, t * 8) * Math.max(0, 1 - t);
+        if (this.y < -20 || this.age > this.life) this.reset();
+      }
+      draw() {
+        if (this.a <= 0.005) return;
+        const gR = this.type === 1 ? this.r * 6 : this.r * 5;
+        const g  = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, gR);
+        const [r,gr,b] = hex2rgb(this.col);
+        g.addColorStop(0,   `rgba(${r},${gr},${b},${this.a})`);
+        g.addColorStop(0.4, `rgba(${r},${gr},${b},${this.a * 0.4})`);
+        g.addColorStop(1,   `rgba(${r},${gr},${b},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, gR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ── Mist blob ─────────────────────────────────────────────────────────────
+    class Mist {
+      constructor() { this.reset(); this.x = rnd(0, W()); this.y = rnd(0, H()); }
+      reset() {
+        this.x  = rnd(-200, W() + 200);
+        this.y  = rnd(H() * 0.2, H());
+        this.r  = rnd(180, 400);
+        this.vx = rnd(-0.18, 0.18);
+        this.vy = rnd(-0.08, -0.02);    // drift slowly upward
+        this.a  = rnd(0.015, 0.045);
+        this.col = pick(mists);
+        this.life= rnd(500, 1200);
+        this.age = 0;
+      }
+      step() {
+        this.x  += this.vx;
+        this.y  += this.vy;
+        this.age++;
+        if (this.y < -this.r || this.age > this.life) this.reset();
+      }
+      draw() {
+        const [r,g,b] = hex2rgb(this.col);
+        const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r);
+        grad.addColorStop(0,   `rgba(${r},${g},${b},${this.a})`);
+        grad.addColorStop(0.5, `rgba(${r},${g},${b},${this.a * 0.3})`);
+        grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ── Light ray (rare streak) ────────────────────────────────────────────────
+    class Ray {
+      constructor() { this.reset(); this.t = rnd(0, 300); }
+      reset() {
+        this.x     = rnd(W() * 0.1, W() * 0.9);
+        this.angle = rnd(-0.3, 0.3);   // near-vertical
+        this.w     = rnd(20, 60);
+        this.len   = rnd(H() * 0.3, H() * 0.7);
+        this.maxA  = rnd(0.01, 0.025);
+        this.t     = 0;
+        this.life  = rnd(200, 500);
+        this.col   = pick(colors);
+      }
+      step() {
+        this.t++;
+        if (this.t > this.life) this.reset();
+      }
+      draw() {
+        const progress = this.t / this.life;
+        const a = this.maxA * Math.sin(progress * Math.PI); // bell fade
+        if (a <= 0.003) return;
+        ctx.save();
+        ctx.translate(this.x, 0);
+        ctx.rotate(this.angle);
+        const [r,g,b] = hex2rgb(this.col);
+        const g2 = ctx.createLinearGradient(-this.w/2, 0, this.w/2, 0);
+        g2.addColorStop(0,   `rgba(${r},${g},${b},0)`);
+        g2.addColorStop(0.5, `rgba(${r},${g},${b},${a})`);
+        g2.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = g2;
+        const g3 = ctx.createLinearGradient(0, 0, 0, this.len);
+        g3.addColorStop(0,   `rgba(${r},${g},${b},${a})`);
+        g3.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = g3;
+        // Draw tapered ray
+        ctx.beginPath();
+        ctx.moveTo(-this.w/2, 0);
+        ctx.lineTo(this.w/2,  0);
+        ctx.lineTo(2, this.len);
+        ctx.lineTo(-2, this.len);
+        ctx.closePath();
+        ctx.globalAlpha = a;
+        const rayGrad = ctx.createLinearGradient(-this.w/2, 0, this.w/2, 0);
+        const [r2,g2c,b2] = hex2rgb(this.col);
+        rayGrad.addColorStop(0,   `rgba(${r2},${g2c},${b2},0)`);
+        rayGrad.addColorStop(0.5, `rgba(${r2},${g2c},${b2},1)`);
+        rayGrad.addColorStop(1,   `rgba(${r2},${g2c},${b2},0)`);
+        ctx.fillStyle = rayGrad;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Build scene
+    const NPART = 110;
+    const NMIST = 7;
+    const NRAY  = 3;
+    const parts = Array.from({ length: NPART }, (_, i) => new Particle(i < NPART));
+    const fogs  = Array.from({ length: NMIST }, () => new Mist());
+    const rays  = Array.from({ length: NRAY  }, () => new Ray());
+
+    let frame = 0;
+
+    const loop = () => {
+      rafRef.current = requestAnimationFrame(loop);
+      frame++;
+
+      // Clear with slight trail effect for smoother look
+      ctx.clearRect(0, 0, W(), H());
+
+      // Draw back→front: mist → rays → particles
+      fogs.forEach(f  => { f.step(); f.draw(); });
+      // Rays only on dota tab (most dramatic)
+      if (tab === "dota" || tab === "wow") {
+        rays.forEach(r => { r.step(); r.draw(); });
+      }
+      parts.forEach(p => { p.step(); p.draw(); });
+    };
+
+    loop();
+
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [tab]); // ← re-runs on tab change to swap colors
+
+  return (
+    <>
+      {/* Solid base */}
+      <div style={{ position:"fixed", inset:0, zIndex:0,
+        background: theme.bg, transition:"background .5s ease",
+        pointerEvents:"none" }} />
+
+      {/* Canvas particles */}
+      <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:1,
+        width:"100%", height:"100%", pointerEvents:"none",
+        opacity: bgOpacity, transition:"opacity .45s ease" }} />
+
+      {/* Wallpaper image (subtle, behind overlay) */}
+      {theme.image && (
+        <div key={tab} style={{ position:"fixed", inset:0, zIndex:2,
+          backgroundImage:`url(${theme.image})`,
+          backgroundSize:"cover", backgroundPosition:"center top",
+          backgroundRepeat:"no-repeat",
+          opacity: bgOpacity * 0.55,   // keep it subtle so particles show
+          transition:"opacity .45s ease",
+          pointerEvents:"none" }} />
+      )}
+
+      {/* Dark overlay — gradient from transparent top → solid bottom */}
+      <div style={{ position:"fixed", inset:0, zIndex:3,
+        background: theme.overlay,
+        opacity: bgOpacity, transition:"opacity .45s ease",
+        pointerEvents:"none" }} />
+
+      {/* Vignette */}
+      <div style={{ position:"fixed", inset:0, zIndex:4,
+        background:"radial-gradient(ellipse 130% 130% at 50% 50%,transparent 30%,rgba(0,0,0,.65)100%)",
+        pointerEvents:"none" }} />
+
+      {/* Watermark */}
+      {theme.label && (
+        <div style={{ position:"fixed", top:"50%", left:"50%",
+          transform:"translate(-50%,-50%)", zIndex:5,
+          fontFamily:"'Bebas Neue',sans-serif",
+          fontSize:"clamp(80px,18vw,200px)", letterSpacing:".12em",
+          color:"transparent",
+          WebkitTextStroke:`1px ${theme.color??"#fff"}`,
+          opacity: bgOpacity * 0.03,
+          whiteSpace:"nowrap", userSelect:"none", pointerEvents:"none",
+          transition:"opacity .5s ease" }}>
+          {theme.label}
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App(){
-  const [scrolled, setScrolled]=useState(false);
-  const [tab,      setTab]     =useState("all");
-  const [bgOpacity,setBgOpacity]=useState(1);
+  const [scrolled,  setScrolled] = useState(false);
+  const [tab,       setTab]      = useState("all");
+  const [bgOpacity, setBgOpacity]= useState(1);
 
   useEffect(()=>{
     const fn=()=>setScrolled(window.scrollY>20);
@@ -744,57 +1046,41 @@ export default function App(){
     return()=>window.removeEventListener("scroll",fn);
   },[]);
 
-  const handleTabChange=useCallback((newTab)=>{
+  const handleTabChange = useCallback((newTab)=>{
     if(newTab===tab) return;
     setBgOpacity(0);
-    setTimeout(()=>{setTab(newTab);setBgOpacity(1);},180);
+    setTimeout(()=>{ setTab(newTab); setBgOpacity(1); }, 180);
   },[tab]);
 
-  const theme=BG_THEMES[tab]??BG_THEMES.all;
+  const theme = BG_THEMES[tab] ?? BG_THEMES.all;
 
   return(
     <>
       <style>{GLOBAL_CSS}</style>
-      {/* Layer 0: base colour */}
-      <div style={{position:"fixed",inset:0,zIndex:0,background:theme.bg,transition:"background .5s ease",pointerEvents:"none"}}/>
-      {/* Layer 1: wallpaper */}
-      {theme.image&&(
-        <div key={tab} style={{position:"fixed",inset:0,zIndex:1,backgroundImage:`url(${theme.image})`,backgroundSize:"cover",backgroundPosition:"center top",backgroundRepeat:"no-repeat",opacity:bgOpacity,transition:"opacity .45s ease",pointerEvents:"none"}}/>
-      )}
-      {/* Layer 2: dark overlay */}
-      <div style={{position:"fixed",inset:0,zIndex:2,background:theme.overlay,opacity:bgOpacity,transition:"opacity .45s ease",pointerEvents:"none"}}/>
-      {/* Layer 3: accent glow */}
-      <div style={{position:"fixed",inset:0,zIndex:3,background:theme.grad,opacity:bgOpacity,transition:"opacity .45s ease",pointerEvents:"none"}}/>
-      {/* Layer 4: vignette */}
-      <div style={{position:"fixed",inset:0,zIndex:4,background:"radial-gradient(ellipse 130% 130% at 50% 50%,transparent 35%,rgba(0,0,0,.60)100%)",pointerEvents:"none"}}/>
-      {/* Layer 5: floating orbs */}
-      <div style={{position:"fixed",inset:0,zIndex:5,overflow:"hidden",pointerEvents:"none"}}>
-        <div style={{position:"absolute",width:420,height:420,borderRadius:"50%",background:`radial-gradient(circle,${theme.color??"#5865f2"}12 0%,transparent 70%)`,top:"-10%",left:"58%",animation:"float1 18s ease-in-out infinite",transition:"background .5s ease"}}/>
-        <div style={{position:"absolute",width:320,height:320,borderRadius:"50%",background:`radial-gradient(circle,${theme.color??"#a78bfa"}0e 0%,transparent 70%)`,top:"30%",left:"-5%",animation:"float2 22s ease-in-out infinite",transition:"background .5s ease"}}/>
-        <div style={{position:"absolute",width:260,height:260,borderRadius:"50%",background:`radial-gradient(circle,${theme.color??"#3b82f6"}0b 0%,transparent 70%)`,bottom:"8%",right:"4%",animation:"float3 26s ease-in-out infinite",transition:"background .5s ease"}}/>
-      </div>
-      {/* Layer 6: game watermark */}
-      {theme.label&&(
-        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:6,fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(80px,18vw,200px)",letterSpacing:".12em",color:"transparent",WebkitTextStroke:`1px ${theme.color??"#fff"}`,opacity:.03,whiteSpace:"nowrap",userSelect:"none",pointerEvents:"none",transition:"opacity .5s ease"}}>
-          {theme.label}
-        </div>
-      )}
-      {/* Content */}
-      <div style={{position:"relative",zIndex:10}}>
+
+      {/* ── Animated background ── */}
+      <AnimatedBackground theme={theme} tab={tab} bgOpacity={bgOpacity} />
+
+      {/* ── Content ── */}
+      <div style={{ position:"relative", zIndex:10 }}>
         <Header scrolled={scrolled}/>
-        <main style={{maxWidth:900,margin:"0 auto",padding:"32px 20px 60px"}}>
+        <main style={{ maxWidth:900, margin:"0 auto", padding:"32px 20px 60px" }}>
           <NewsSection tab={tab} setTab={handleTabChange}/>
           <MetaRankings/>
           <GuidesSection/>
           <CommunitySection/>
         </main>
-        <footer style={{borderTop:"1px solid var(--border)",padding:"24px 20px",textAlign:"center"}}>
-          <div style={{maxWidth:900,margin:"0 auto"}}>
-            <div className="stt" style={{fontSize:14,color:"var(--dim)",letterSpacing:".15em",marginBottom:6}}>RUSE'S BAKERY</div>
-            <p style={{fontSize:11,color:"rgba(255,255,255,.12)",marginBottom:12}}>Fan-made gaming news aggregator. Not affiliated with Blizzard Entertainment or Valve Corporation.</p>
-            <div style={{display:"flex",justifyContent:"center",gap:20,flexWrap:"wrap"}}>
+        <footer style={{ borderTop:"1px solid var(--border)", padding:"24px 20px", textAlign:"center" }}>
+          <div style={{ maxWidth:900, margin:"0 auto" }}>
+            <div className="stt" style={{ fontSize:14, color:"var(--dim)", letterSpacing:".15em", marginBottom:6 }}>RUSE'S BAKERY</div>
+            <p style={{ fontSize:11, color:"rgba(255,255,255,.12)", marginBottom:12 }}>Fan-made gaming news aggregator. Not affiliated with Blizzard Entertainment or Valve Corporation.</p>
+            <div style={{ display:"flex", justifyContent:"center", gap:20, flexWrap:"wrap" }}>
               {[["Discord","#5865f2","https://discord.gg/3yKHBx3JZ"],["Wowhead","#ff8000","https://www.wowhead.com"],["MMO-Champion","#4da6ff","https://www.mmo-champion.com"],["Dota 2","#c23c2a","https://www.dota2.com"]].map(([l,c,u])=>(
-                <a key={l} href={u} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:c+"88",textDecoration:"none",fontFamily:"'Rajdhani',sans-serif",fontWeight:600,letterSpacing:".06em"}}>{l.toUpperCase()}</a>
+                <a key={l} href={u} target="_blank" rel="noopener noreferrer"
+                   style={{ fontSize:11, color:c+"88", textDecoration:"none",
+                     fontFamily:"'Rajdhani',sans-serif", fontWeight:600, letterSpacing:".06em" }}>
+                  {l.toUpperCase()}
+                </a>
               ))}
             </div>
           </div>
@@ -803,3 +1089,4 @@ export default function App(){
     </>
   );
 }
+
